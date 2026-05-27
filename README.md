@@ -4,8 +4,8 @@ MCMS is a focused industrial costing platform for JSW Steel. It centralizes mast
 
 ## Stack
 
-- `client/`: React 19 + TypeScript + Vite + Tailwind CSS v4 + ShadCN-style source components + React Router + Axios + Chart.js + Framer Motion
-- `server/`: Express 5 + TypeScript + Prisma + PostgreSQL + JWT access/rotating refresh sessions + bcrypt + Helmet + CORS + rate limiting + Zod
+- [`client/`](client/README.md): React 19 + TypeScript + Vite + Tailwind CSS v4 + ShadCN-style source components + React Router + Axios + Chart.js + Framer Motion
+- [`server/`](server/README.md): Express 5 + TypeScript + Prisma + PostgreSQL + JWT access/rotating refresh sessions + bcrypt + Helmet + CORS + rate limiting + Zod
 - Exports: PDFKit PDFs and ExcelJS workbooks
 - Delivery: Docker Compose definitions for client, API, and PostgreSQL
 
@@ -18,7 +18,7 @@ MCMS is a focused industrial costing platform for JSW Steel. It centralizes mast
   - raw-material composition builder
 - Center product-property accordions and live summary cost panel
 - Grade comparison page with sticky comparison table and difference highlighting
-- Metals, grades, raw materials, alloys, suppliers, price lists, charge settings, users, reports, audit logs, and in-app notifications APIs
+- Metals, grades, raw materials, alloys, suppliers, price lists, price history, users, reports, audit logs, and in-app notifications APIs
 - Calculation snapshots so future master price updates do not mutate history
 - PDF calculation receipts and PDF/Excel report exports
 
@@ -59,6 +59,14 @@ MCMS is a focused industrial costing platform for JSW Steel. It centralizes mast
 Frontend: `http://localhost:5173`  
 API: `http://localhost:4000/api`
 
+
+
+.
+http://localhost:5173/login    #local host link
+
+➜  Local:   http://localhost:5174/
+➜  Network: http://10.113.249.110:5174/
+
 The frontend has a development-only fixture fallback so the supplied dashboard/workspace design can be previewed even when PostgreSQL is not yet running. Production login does not use that fallback.
 
 ## Demo Users
@@ -75,6 +83,7 @@ All seeded demo users use password `MCMS@2026`.
 ## API Shape
 
 Authentication:
+
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
 - `POST /api/auth/logout`
@@ -82,7 +91,7 @@ Authentication:
 
 Core business routes:
 - dashboards: `/api/dashboard/admin`, `/api/dashboard/user`
-- masters: `/api/metals`, `/api/grades`, `/api/raw-materials`, `/api/alloys`, `/api/suppliers`, `/api/prices`, `/api/charges`
+- masters: `/api/metals`, `/api/grades`, `/api/raw-materials`, `/api/alloys`, `/api/suppliers`, `/api/prices`, `/api/price-history`
 - costing: `/api/calculations/preview`, `/api/calculations`, `/api/calculations/:id`, `/api/calculations/:id/draft`, `/api/calculations/:id/complete`
 - comparison: `/api/comparisons`, `/api/comparisons/preview`
 - reports and exports: `/api/reports/*`, `/api/exports/*`
@@ -92,17 +101,13 @@ List endpoints support pagination and the master routes expose relevant filters 
 
 ## Cost Rules
 
-Calculator price and charge inputs are master locked.
+Calculator price inputs are master locked.
 
 ```text
-BaseCost = sum(itemQuantity * activePrice * gradeMultiplier + itemExtraPrice)
-Scrap = configured scrap rule applied to BaseCost
-Transport = configured transport charge
-GST = configured GST applied to taxable subtotal
-FinalTotal = BaseCost + Scrap + Transport + GST + AdditionalCharges
+FinalTotal = sum(itemQuantity * activePrice * gradeMultiplier + itemExtraPrice)
 ```
 
-Money, rates, and quantities use Prisma/PostgreSQL decimal columns. Every saved calculation stores the selected price, charge, grade, and computed total snapshot used at that time.
+Money, rates, and quantities use Prisma/PostgreSQL decimal columns. Every saved calculation stores the selected price, grade, and computed total snapshot used at that time.
 
 ## Verification
 
@@ -111,8 +116,4 @@ npm run build
 npm run test
 ```
 
-Docker files are present, but this workspace machine did not have Docker installed during implementation. The initial Prisma SQL migration is under `server/prisma/migrations/`.
 
-
-
-http://localhost:5173/login

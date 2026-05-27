@@ -17,7 +17,7 @@ services:
 
   api:
     build:
-      context: ./server
+      context: ./backend
     environment:
       DATABASE_URL: postgresql://mcms:mcms@db:5432/mcms?schema=public
       JWT_ACCESS_SECRET: docker-access-secret-change-me
@@ -30,11 +30,11 @@ services:
         condition: service_healthy
     ports:
       - "4000:4000"
-    command: sh -c "npx prisma migrate deploy && npm run seed && node dist/index.js"
+    command: sh -c "npx prisma migrate deploy && npm run seed && node dist/server.js"
 
   client:
     build:
-      context: ./client
+      context: ./frontend
       args:
         VITE_API_URL: http://localhost:4000/api
     depends_on:
