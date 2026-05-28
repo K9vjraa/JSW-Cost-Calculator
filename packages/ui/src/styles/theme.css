@@ -1,0 +1,135 @@
+/**
+ * MCMS Design System - Tailwind CSS v4 Theme stylesheet
+ * 
+ * Defines @theme variables and component layers matching the premium, high-density JSW corporate style.
+ * This CSS file is imported by frontend build styles to guarantee style continuity.
+ */
+
+@theme {
+  /* JSW Corporate Colors */
+  --color-jsw-corp: #032f67;
+  --color-jsw-blue: #0057b8;
+  --color-jsw-accent: #0b63c8;
+  --color-jsw-light-bg: #e8f0fb;
+  --color-jsw-text-dark: #063d83;
+
+  /* Industrial Accent Colors & Glowing Backgrounds */
+  --color-success-fg: #087443;
+  --color-success-bg: #e8fbf0;
+  --color-success-border: #bde4cf;
+
+  --color-danger-fg: #d63031;
+  --color-danger-bg: #fdf0f0;
+  --color-danger-border: #f9cccc;
+
+  --color-warning-fg: #f2994a;
+  --color-warning-bg: #fef5ec;
+  --color-warning-border: #fdd9b5;
+
+  --color-info-fg: #0057b8;
+  --color-info-bg: #edf5ff;
+  --color-info-border: #bfd6f5;
+
+  /* High Density Grid Units */
+  --spacing-grid-xxs: 2px;
+  --spacing-grid-xs: 4px;
+  --spacing-grid-sm: 8px;
+  --spacing-grid-md: 12px;
+  --spacing-grid-lg: 16px;
+  --spacing-grid-xl: 20px;
+  --spacing-grid-xxl: 32px;
+
+  /* Industrial Radius Tokens */
+  --radius-xs: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/* ----------------------------------------------------
+   REUSABLE ENTERPRISE UI STYLE UTILITIES
+   ---------------------------------------------------- */
+
+@layer utilities {
+  /* Standard Layout Grid Gaps */
+  .mcms-layout-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--spacing-grid-lg);
+  }
+  @media (min-width: 1024px) {
+    .mcms-layout-grid {
+      grid-template-columns: 2fr 1fr;
+    }
+  }
+
+  /* High-Contrast Interactive Left Sidebar UI */
+  .mcms-sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-grid-md);
+    min-height: 44px;
+    border-radius: var(--radius-md);
+    padding-left: var(--spacing-grid-md);
+    padding-right: var(--spacing-grid-md);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+  }
+  .mcms-sidebar-item-active {
+    background-color: var(--color-jsw-accent);
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(3, 47, 103, 0.15);
+  }
+  .mcms-sidebar-item-hover:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  /* Sticky Industrial Ledger Table Headings */
+  .mcms-table-header-cell {
+    background-color: #f1f5f9;
+    color: #475569;
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    height: 38px;
+  }
+
+  /* Density Input Controls */
+  .mcms-dense-input {
+    height: 34px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background-color: #ffffff;
+    padding-left: var(--spacing-grid-md);
+    padding-right: var(--spacing-grid-md);
+    transition: border-color 0.15s ease-in-out;
+  }
+  .mcms-dense-input:focus {
+    border-color: var(--color-jsw-blue);
+    outline: none;
+  }
+
+  /* Premium Accordion Styling */
+  .mcms-accordion-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-grid-md) var(--spacing-grid-lg);
+    background-color: #ffffff;
+    border-bottom: 1px solid var(--border);
+    transition: background-color 0.2s;
+  }
+  .mcms-accordion-header:hover {
+    background-color: #f8fafc;
+  }
+  .mcms-accordion-content {
+    background-color: #fafcff;
+    padding: var(--spacing-grid-lg);
+    border-bottom: 1px solid var(--border);
+  }
+}

@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CalculationStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Role {
+  id          String @id @default(uuid())
+  name        String @unique
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now())
+}
+
+model User {
+  id                 String @id @default(uuid())
+  name               String
+  email              String @unique
+  passwordHash       String
+  department         String?
+  status             String @default("ACTIVE")
+  failedLoginCount   Int @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  roleId             String
+  role               Role @relation(fields: [roleId], references: [id])
+  refreshTokens      RefreshToken[]
+  alloys             Alloy[]
+  calculations       Calculation[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  reports            Report[]
+  priceHistoryEvents PriceHistory[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([roleId])
+}
+
+model RefreshToken {
+  id             String @id @default(uuid())
+  tokenHash      String @unique
+  userId         String
+  user           User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  replacedByHash String?
+  createdAt      DateTime @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model Metal {
+  id              String @id @default(uuid())
+  name            String
+  code            String @unique
+  category        String
+  unit            String @default("kg")
+  status          String @default("ACTIVE")
+  description     String?
+  grades          Grade[]
+  alloyComponents AlloyComponent[]
+  prices          PriceList[]
+  priceHistory    PriceHistory[]
+  calculationItems CalculationItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([name])
+  @@index([category, status])
+}
+
+model Grade {
+  id                    String @id @default(uuid())
+  metalId               String
+  metal                 Metal @relation(fields: [metalId], references: [id], onDelete: Cascade)
+  name                  String
+  subGrade              String?
+  multiplier            Decimal @db.Decimal(10, 4)
+  extraPrice            Decimal @default(0) @db.Decimal(14, 2)
+  mechanicalProperties  Json
+  toleranceProperties   Json
+  bendProperties        Json
+  chemicalComposition   Json
+  status                String @default("ACTIVE")
+  alloyComponents       AlloyComponent[]
+  calculationItems      CalculationItem[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([metalId, name, subGrade])
+  @@index([metalId, status])
+}
+
+model RawMaterial {
+  id               String @id @default(uuid())
+  name             String
+  code             String @unique
+  unit             String @default("kg")
+  status           String @default("ACTIVE")
+  description      String?
+  prices           PriceList[]
+  priceHistory     PriceHistory[]
+  alloyComponents  AlloyComponent[]
+  calculationItems CalculationItem[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([name, status])
+}
+
+model Alloy {
+  id           String @id @default(uuid())
+  name         String
+  code         String @unique
+  type         String
+  createdById  String?
+  createdBy    User? @relation(fields: [createdById], references: [id])
+  components   AlloyComponent[]
+  calculations Calculation[]
+  status       String @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([name, status])
+}
+
+model AlloyComponent {
+  id                 String @id @default(uuid())
+  alloyId            String
+  alloy              Alloy @relation(fields: [alloyId], references: [id], onDelete: Cascade)
+  metalId            String?
+  metal              Metal? @relation(fields: [metalId], references: [id])
+  gradeId            String?
+  grade              Grade? @relation(fields: [gradeId], references: [id])
+  rawMaterialId      String?
+  rawMaterial        RawMaterial? @relation(fields: [rawMaterialId], references: [id])
+  compositionPercent Decimal @db.Decimal(7, 4)
+  quantity           Decimal? @db.Decimal(16, 4)
+  createdAt          DateTime @default(now())
+
+  @@index([alloyId])
+}
+
+model Supplier {
+  id          String @id @default(uuid())
+  name        String
+  code        String @unique
+  contactName String?
+  email       String
+  phone       String?
+  status      String @default("ACTIVE")
+  prices      PriceList[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name, status])
+}
+
+model PriceList {
+  id            String @id @default(uuid())
+  metalId       String?
+  metal         Metal? @relation(fields: [metalId], references: [id])
+  rawMaterialId String?
+  rawMaterial   RawMaterial? @relation(fields: [rawMaterialId], references: [id])
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  pricePerUnit  Decimal @db.Decimal(16, 4)
+  currency      String @default("INR")
+  unit          String @default("kg")
+  source        String
+  location      String @default("India")
+  effectiveFrom DateTime
+  active        Boolean @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([metalId, active, effectiveFrom])
+  @@index([rawMaterialId, active, effectiveFrom])
+  @@index([supplierId])
+}
+
+model PriceHistory {
+  id            String @id @default(uuid())
+  metalId       String?
+  metal         Metal? @relation(fields: [metalId], references: [id])
+  rawMaterialId String?
+  rawMaterial   RawMaterial? @relation(fields: [rawMaterialId], references: [id])
+  oldPrice      Decimal? @db.Decimal(16, 4)
+  newPrice      Decimal @db.Decimal(16, 4)
+  updatedById   String
+  updatedBy     User @relation(fields: [updatedById], references: [id])
+  reason        String?
+  updatedAt     DateTime @default(now())
+
+  @@index([metalId, updatedAt])
+  @@index([rawMaterialId, updatedAt])
+}
+
+
+
+model Calculation {
+  id             String @id @default(uuid())
+  batchId        String @unique
+  mode           String
+  name           String
+  userId         String
+  user           User @relation(fields: [userId], references: [id])
+  alloyId        String?
+  alloy          Alloy? @relation(fields: [alloyId], references: [id])
+  totalQuantity  Decimal @db.Decimal(16, 4)
+  baseCost       Decimal @db.Decimal(18, 4)
+  gstAmount      Decimal @default(0) @db.Decimal(18, 4)
+  finalCost      Decimal @db.Decimal(18, 4)
+  snapshot       Json
+  status         CalculationStatus @default(DRAFT)
+  items          CalculationItem[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  completedAt    DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([alloyId])
+}
+
+model CalculationItem {
+  id              String @id @default(uuid())
+  calculationId   String
+  calculation     Calculation @relation(fields: [calculationId], references: [id], onDelete: Cascade)
+  metalId         String?
+  metal           Metal? @relation(fields: [metalId], references: [id])
+  rawMaterialId   String?
+  rawMaterial     RawMaterial? @relation(fields: [rawMaterialId], references: [id])
+  gradeId         String?
+  grade           Grade? @relation(fields: [gradeId], references: [id])
+  itemName        String
+  quantity        Decimal @db.Decimal(16, 4)
+  compositionPct  Decimal? @db.Decimal(7, 4)
+  unitPrice       Decimal @db.Decimal(16, 4)
+  gradeMultiplier Decimal @db.Decimal(10, 4)
+  extraPrice      Decimal @db.Decimal(16, 4)
+  baseCost        Decimal @db.Decimal(18, 4)
+  snapshot        Json
+
+  @@index([calculationId])
+}
+
+
+
+model AuditLog {
+  id        String @id @default(uuid())
+  userId    String?
+  user      User? @relation(fields: [userId], references: [id])
+  action    String
+  entity    String
+  entityId  String?
+  ipAddress String?
+  details   Json
+  createdAt DateTime @default(now())
+
+  @@index([entity, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Notification {
+  id        String @id @default(uuid())
+  userId    String?
+  user      User? @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  category  String
+  priority  NotificationPriority @default(MEDIUM)
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt, createdAt])
+  @@index([category, createdAt])
+}
+
+model Report {
+  id             String @id @default(uuid())
+  name           String
+  type           String
+  filters        Json
+  generatedById  String
+  generatedBy    User @relation(fields: [generatedById], references: [id])
+  calculationId  String?
+  createdAt      DateTime @default(now())
+
+  @@index([type, createdAt])
+}
+
+/// Enterprise system settings – key/value store for runtime configuration
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  label       String
+  category    String   @default("GENERAL")
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+}
+
+/// GST slab rates applied to calculation final cost
+model GstSlab {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  rate        Decimal  @db.Decimal(7, 4)
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

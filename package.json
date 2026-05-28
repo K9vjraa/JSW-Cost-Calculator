@@ -3,16 +3,20 @@
   "private": true,
   "version": "1.0.0",
   "workspaces": [
-    "frontend",
-    "backend"
+    "apps/frontend",
+    "apps/backend",
+    "packages/ui",
+    "packages/types",
+    "packages/utils",
+    "packages/config"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace backend\" \"npm run dev --workspace frontend\"",
-    "build": "npm run build --workspace backend && npm run build --workspace frontend",
-    "test": "npm run test --workspace backend && npm run test --workspace frontend",
-    "prisma:generate": "npm run prisma:generate --workspace backend",
-    "prisma:migrate": "npm run prisma:migrate --workspace backend",
-    "seed": "npm run seed --workspace backend"
+    "dev": "concurrently \"npm run dev --workspace @jsw-mcms/backend\" \"npm run dev --workspace @jsw-mcms/frontend\"",
+    "build": "npm run build --workspace @jsw-mcms/backend && npm run build --workspace @jsw-mcms/frontend",
+    "test": "npm run test --workspace @jsw-mcms/backend && npm run test --workspace @jsw-mcms/frontend",
+    "prisma:generate": "npm run prisma:generate --workspace @jsw-mcms/backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace @jsw-mcms/backend",
+    "seed": "npm run seed --workspace @jsw-mcms/backend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

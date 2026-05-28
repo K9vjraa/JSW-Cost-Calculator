@@ -1,46 +1,116 @@
+###############################################################################
+# JSW MCMS — Production Docker Compose
+# Platforms: Neon PostgreSQL (external), Railway/Render (backend), Vercel (frontend)
+# Local full-stack: docker compose up --build
+###############################################################################
+
 services:
+
+  # ─── PostgreSQL (local dev only — use Neon in production) ─────────────────
   db:
     image: postgres:16-alpine
+    container_name: mcms-db
+    restart: unless-stopped
     environment:
       POSTGRES_DB: mcms
       POSTGRES_USER: mcms
-      POSTGRES_PASSWORD: mcms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcms_local_secret}
     ports:
       - "5432:5432"
     volumes:
       - mcms-postgres:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U mcms -d mcms"]
       interval: 5s
       timeout: 5s
       retries: 20
+      start_period: 10s
+    networks:
+      - mcms-internal
+    profiles: ["local", "full"]
 
+  # ─── Backend API ──────────────────────────────────────────────────────────
   api:
     build:
-      context: ./backend
+      context: ./apps/backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: mcms-api
+    restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://mcms:mcms@db:5432/mcms?schema=public
-      JWT_ACCESS_SECRET: docker-access-secret-change-me
-      JWT_REFRESH_SECRET: docker-refresh-secret-change-me
-      CLIENT_ORIGIN: http://localhost:5173
-      PORT: 4000
       NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mcms:mcms_local_secret@db:5432/mcms?schema=public&sslmode=disable&connection_limit=10}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "4000:4000"
-    command: sh -c "npx prisma migrate deploy && npm run seed && node dist/server.js"
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        node dist/server.js
+      "
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - mcms-internal
+      - mcms-public
+    profiles: ["local", "full", "api"]
 
+  # ─── Frontend (Nginx SPA) ──────────────────────────────────────────────────
   client:
     build:
-      context: ./frontend
+      context: ./apps/frontend
+      dockerfile: Dockerfile
       args:
-        VITE_API_URL: http://localhost:4000/api
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:4000/api}
+        VITE_APP_VERSION: ${npm_package_version:-1.0.0}
+    container_name: mcms-client
+    restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "5173:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+    networks:
+      - mcms-public
+    profiles: ["local", "full", "frontend"]
 
 volumes:
   mcms-postgres:
+    driver: local
+
+networks:
+  mcms-internal:
+    driver: bridge
+    internal: true
+  mcms-public:
+    driver: bridge
