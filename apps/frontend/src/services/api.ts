@@ -93,11 +93,11 @@ api.interceptors.response.use(
     });
 
     if (error.response?.status === 403) {
-      toast.error("Security Clearance: Your current role does not have authorization to perform this action.");
+      toast.error("Security Clearance: Your current role does not have authorization to perform this action.", { id: "erp-unauthorized-alert" });
     } else if (!error.response) {
-      toast.error("ERP Network Disconnected: Unable to reach costing server. Retrying connection...");
+      toast.error("ERP Network Disconnected: Unable to reach costing server. Retrying connection...", { id: "erp-connection-alert" });
     } else if (error.response?.status >= 500) {
-      toast.error("ERP Internal Server Error: JSW Cost Database is temporarily busy. Attempting automatic recovery...");
+      toast.error("ERP Internal Server Error: JSW Cost Database is temporarily busy. Attempting automatic recovery...", { id: "erp-server-alert" });
     }
 
     return Promise.reject(error);
@@ -107,9 +107,8 @@ api.interceptors.response.use(
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 const roleFromEmail = (email: string): Actor["role"] => {
-  if (email.includes("admin")) return "ADMIN";
-  if (email.includes("procurement") || email.includes("finance") || email.includes("production") || email.includes("employee")) return "EMPLOYEE";
-  return "USER";
+  if (email.includes("admin") || email.includes("cost")) return "COSTING_DEPARTMENT";
+  return "PDQC";
 };
 
 export async function login(email: string, password: string, rememberMe?: boolean): Promise<Actor> {
@@ -125,8 +124,8 @@ export async function login(email: string, password: string, rememberMe?: boolea
       id: `demo-${role.toLowerCase()}`,
       email,
       role,
-      name: role === "EMPLOYEE" ? "Rahul Sharma" : role === "ADMIN" ? "Admin User" : "Standard User",
-      department: role
+      name: role === "COSTING_DEPARTMENT" ? "Costing Admin" : "PDQC Specialist",
+      department: role === "COSTING_DEPARTMENT" ? "Costing" : "PDQC"
     };
     setAccessToken("demo-offline-token");
     return actor;

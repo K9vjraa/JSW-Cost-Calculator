@@ -1,0 +1,6 @@
+id,batchId,mode,name,userId,alloyId,totalQuantity,baseCost,gstAmount,finalCost,status,completedAt
+calc-1,BATCH-1023,alloy,SS304 Cost Run – May 2026,user-proc,ALY-SS304-BATCH,1000,63750.0000,0,63750.0000,COMPLETED,2026-05-15T12:00:00.000Z
+calc-2,BATCH-1024,alloy,SS316 Marine Grade Costing,user-proc,ALY-SS316-BATCH,500,42560.0000,0,42560.0000,COMPLETED,2026-05-15T12:00:00.000Z
+calc-3,BATCH-1025,metal,Carbon Steel Structural Run,user-std,,2000,97200.0000,0,97200.0000,COMPLETED,2026-05-15T12:00:00.000Z
+calc-4,BATCH-1026,alloy,High-Strength Alloy Steel Q2,user-fin,ALY-AS-HIGH,750,55800.0000,0,55800.0000,COMPLETED,2026-05-15T12:00:00.000Z
+calc-5,BATCH-1027,metal,SS304 Draft – June Forecast,user-proc,,1500,93750.0000,0,93750.0000,DRAFT,

@@ -8,7 +8,7 @@ import { allowRoles } from "../middleware/auth.js";
 import * as ctrl from "../controllers/user.controller.js";
 
 export const userRoutes = Router();
-userRoutes.use(allowRoles("ADMIN"));
+userRoutes.use(allowRoles("COSTING_DEPARTMENT"));
 
 userRoutes.get("/", ctrl.listUsers);
 userRoutes.post("/", ctrl.createUser);

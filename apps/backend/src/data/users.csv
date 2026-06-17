@@ -1,0 +1,6 @@
+id,name,email,passwordHash,department,status,roleName
+user-admin,Admin User,admin@jsw-mcms.local,$2a$12$R.S2H3lQvP68WfQ6/5kYQ.x96i/T5s7K8q8Xj7p2wB9d6Nf5T3M2y,IT Administration,ACTIVE,COSTING_DEPARTMENT
+user-proc,Rahul Sharma,procurement@jsw-mcms.local,$2a$12$R.S2H3lQvP68WfQ6/5kYQ.x96i/T5s7K8q8Xj7p2wB9d6Nf5T3M2y,Procurement,ACTIVE,COSTING_DEPARTMENT
+user-fin,Meera Iyer,finance@jsw-mcms.local,$2a$12$R.S2H3lQvP68WfQ6/5kYQ.x96i/T5s7K8q8Xj7p2wB9d6Nf5T3M2y,Finance,ACTIVE,PDQC
+user-std,Standard Employee,employee@jsw-mcms.local,$2a$12$R.S2H3lQvP68WfQ6/5kYQ.x96i/T5s7K8q8Xj7p2wB9d6Nf5T3M2y,Operations,ACTIVE,PDQC
+user-usr,Standard User,user@jsw-mcms.local,$2a$12$R.S2H3lQvP68WfQ6/5kYQ.x96i/T5s7K8q8Xj7p2wB9d6Nf5T3M2y,Calculations,ACTIVE,PDQC

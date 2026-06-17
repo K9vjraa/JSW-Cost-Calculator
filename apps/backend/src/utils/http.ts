@@ -18,15 +18,15 @@ export function asyncRoute<T extends (req: Request, res: Response, next: NextFun
 
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (error instanceof ZodError) {
-    res.status(400).json({ message: "Validation failed.", issues: error.issues });
+    res.status(400).json({ success: false, message: "Validation failed.", issues: error.issues });
     return;
   }
   if (error instanceof ApiError) {
-    res.status(error.status).json({ message: error.message });
+    res.status(error.status).json({ success: false, message: error.message });
     return;
   }
   console.error(error);
-  res.status(500).json({ message: error instanceof Error ? error.message : "Unexpected API error." });
+  res.status(500).json({ success: false, message: error instanceof Error ? error.message : "Unexpected API error." });
 }
 
 export function pageArgs(query: Request["query"]) {

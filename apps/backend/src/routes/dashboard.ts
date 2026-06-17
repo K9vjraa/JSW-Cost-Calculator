@@ -29,7 +29,7 @@ async function calculationSeries(userId?: string) {
 
 export const dashboardRoutes = Router();
 
-dashboardRoutes.get("/admin", allowRoles("ADMIN"), asyncRoute(async (_req, res) => {
+dashboardRoutes.get("/admin", allowRoles("COSTING_DEPARTMENT"), asyncRoute(async (_req, res) => {
   const [calculations, alloys, rawMaterials, activeUsers, metals, recent, activity, notices, series] = await Promise.all([
     prisma.calculation.count(),
     prisma.alloy.count({ where: { status: "ACTIVE" } }),
@@ -49,18 +49,18 @@ dashboardRoutes.get("/admin", allowRoles("ADMIN"), asyncRoute(async (_req, res) 
     recent,
     activity,
     notices,
-    systemSummary: { roles: 3, gstSlabs: await prisma.gstSlab.count({ where: { active: true } }), priceLists: await prisma.priceList.count({ where: { active: true } }), reports: await prisma.report.count() }
+    systemSummary: { roles: await prisma.role.count(), gstSlabs: await prisma.gstSlab.count({ where: { active: true } }), priceLists: await prisma.priceList.count({ where: { active: true } }), reports: await prisma.report.count() }
   });
 }));
 
 dashboardRoutes.get("/user", asyncRoute(async (req, res) => {
-  const where = req.actor!.role === "ADMIN" ? {} : { userId: req.actor!.id };
+  const where = req.actor!.role === "COSTING_DEPARTMENT" ? {} : { userId: req.actor!.id };
   const [calculations, savedAlloys, recent, notices, series] = await Promise.all([
     prisma.calculation.count({ where }),
-    prisma.alloy.count({ where: req.actor!.role === "ADMIN" ? {} : { createdById: req.actor!.id } }),
+    prisma.alloy.count({ where: req.actor!.role === "COSTING_DEPARTMENT" ? {} : { createdById: req.actor!.id } }),
     prisma.calculation.findMany({ where, include: { alloy: true }, orderBy: { updatedAt: "desc" }, take: 4 }),
     prisma.notification.findMany({ where: { OR: [{ userId: req.actor!.id }, { userId: null }] }, orderBy: { createdAt: "desc" }, take: 5 }),
-    calculationSeries(req.actor!.role === "ADMIN" ? undefined : req.actor!.id)
+    calculationSeries(req.actor!.role === "COSTING_DEPARTMENT" ? undefined : req.actor!.id)
   ]);
   res.json({
     kpis: {
@@ -72,6 +72,6 @@ dashboardRoutes.get("/user", asyncRoute(async (req, res) => {
     recent,
     notices,
     series,
-    saved: await prisma.alloy.findMany({ where: req.actor!.role === "ADMIN" ? {} : { createdById: req.actor!.id }, orderBy: { updatedAt: "desc" }, take: 4 })
+    saved: await prisma.alloy.findMany({ where: req.actor!.role === "COSTING_DEPARTMENT" ? {} : { createdById: req.actor!.id }, orderBy: { updatedAt: "desc" }, take: 4 })
   });
 }));

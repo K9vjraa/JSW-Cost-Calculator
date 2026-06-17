@@ -1,0 +1,11 @@
+id,metalId,name,subGrade,multiplier,extraPrice,status
+grade-304,metal-ss,SS304,,1.0200,0.00,ACTIVE
+grade-316,metal-ss,SS316,,1.0800,2.50,ACTIVE
+grade-316l,metal-ss,SS316L,,1.1000,3.00,ACTIVE
+grade-low-alloy,metal-as,Low Alloy,,1.1200,4.00,ACTIVE
+grade-high-alloy,metal-as,High Alloy,,1.2200,8.50,ACTIVE
+grade-carbon-low,metal-cs,Low Carbon,,1.0000,0.00,ACTIVE
+grade-carbon-medium,metal-cs,Medium Carbon,,1.0600,1.50,ACTIVE
+grade-al6061,metal-al,Al6061,,1.0500,0.00,ACTIVE
+grade-al5052,metal-al,Al5052,,1.0200,0.00,ACTIVE
+grade-zn-galv,metal-zn,Zn-Galv,,1.0000,0.00,ACTIVE

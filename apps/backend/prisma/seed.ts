@@ -1,468 +1,911 @@
-import { PrismaClient } from "@prisma/client";
+/**
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║  JSW MCMS — Internship Demo Dataset Generator                              ║
+ * ║  Clears old data and populates realistic JSW industrial environment data   ║
+ * ║  Users: 25 | Metals: 52 | Grades: 104 | Calculations: 160 | Price History: 200║
+ * ║  Audit Logs: 500 | Notifications: 100 | Reports: 15 | Catalog: 28         ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
+ */
+
+import { PrismaClient, CalculationStatus, NotificationPriority } from "@prisma/client";
 import bcrypt from "bcryptjs";
+
+// ── Pre-process Database URL dynamically ─────────────────────────────────────
+const dbHost = process.env.DB_HOST || "localhost";
+const dbPort = process.env.DB_PORT || "5432";
+const dbUser = process.env.DB_USER || "postgres";
+const dbPass = process.env.DB_PASSWORD || "admin123";
+const dbName = process.env.DB_NAME || "mcms";
+
+let dbUrl = process.env.DATABASE_URL;
+if (!dbUrl || dbUrl.includes("${") || dbUrl.includes("$(")) {
+  dbUrl = `postgresql://${dbUser}:${dbPass}@${dbHost}:${dbPort}/${dbName}`;
+  process.env.DATABASE_URL = dbUrl;
+}
 
 const prisma = new PrismaClient();
 
-// ─── Grade technical property templates ─────────────────────────────────────
-const props = {
-  ss304: {
-    mechanicalProperties: { uts: "515 MPa", yieldStrength: "205 MPa", elongation: "45%", hardness: "HRB 80" },
-    toleranceProperties: { thickness: "+/- 0.10 mm", width: "+/- 3 mm", flatness: "Standard IS:513" },
-    bendProperties: { minimumRadius: "2.0T", rating: "Good", springback: "Moderate" },
-    chemicalComposition: { chromium: "18.0–20.0%", nickel: "8.0–10.5%", carbon: "≤0.08%", manganese: "≤2.0%", silicon: "≤0.75%" }
+// Utility helper to generate past dates
+function daysAgo(n: number): Date {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d;
+}
+
+// Helper to generate a random number in range
+function randomRange(min: number, max: number): number {
+  return Math.random() * (max - min) + min;
+}
+
+// Helper to pick a random item from array
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Technical properties templates for grades
+const baseTechnicalProperties = {
+  mechanicalProperties: {
+    uts: "410-520 MPa",
+    yieldStrength: "250 MPa min",
+    elongation: "23%",
+    hardness: "HRB 70-80"
   },
-  ss316: {
-    mechanicalProperties: { uts: "580 MPa", yieldStrength: "290 MPa", elongation: "40%", hardness: "HRB 95" },
-    toleranceProperties: { thickness: "+/- 0.08 mm", width: "+/- 2 mm", flatness: "Tight IS:513" },
-    bendProperties: { minimumRadius: "2.2T", rating: "Good", springback: "Moderate" },
-    chemicalComposition: { chromium: "16.0–18.0%", nickel: "10.0–14.0%", molybdenum: "2.0–3.0%", carbon: "≤0.08%", manganese: "≤2.0%" }
+  toleranceProperties: {
+    thickness: "+/- 0.08 mm",
+    width: "+/- 3 mm",
+    flatness: "Standard IS:1852"
   },
-  ss316l: {
-    mechanicalProperties: { uts: "570 MPa", yieldStrength: "270 MPa", elongation: "40%", hardness: "HRB 90" },
-    toleranceProperties: { thickness: "+/- 0.08 mm", width: "+/- 2 mm", flatness: "Tight IS:513" },
-    bendProperties: { minimumRadius: "2.0T", rating: "Excellent", springback: "Low" },
-    chemicalComposition: { chromium: "16.0–18.0%", nickel: "10.0–14.0%", molybdenum: "2.0–3.0%", carbon: "≤0.03%", manganese: "≤2.0%" }
+  bendProperties: {
+    minimumRadius: "1.5T",
+    rating: "Good",
+    springback: "Low"
   },
-  lowAlloy: {
-    mechanicalProperties: { uts: "700 MPa", yieldStrength: "420 MPa", elongation: "25%", hardness: "HRB 95" },
-    toleranceProperties: { thickness: "+/- 0.12 mm", width: "+/- 4 mm", flatness: "Standard" },
-    bendProperties: { minimumRadius: "1.8T", rating: "Excellent", springback: "Low" },
-    chemicalComposition: { carbon: "0.20%", manganese: "1.20%", chromium: "1.00%", silicon: "0.30%", vanadium: "0.10%" }
-  },
-  highAlloy: {
-    mechanicalProperties: { uts: "850 MPa", yieldStrength: "560 MPa", elongation: "18%", hardness: "HRC 28" },
-    toleranceProperties: { thickness: "+/- 0.10 mm", width: "+/- 3 mm", flatness: "Precision" },
-    bendProperties: { minimumRadius: "2.5T", rating: "Good", springback: "High" },
-    chemicalComposition: { carbon: "0.35%", manganese: "0.90%", chromium: "1.50%", molybdenum: "0.20%", silicon: "0.25%" }
-  },
-  carbonLow: {
-    mechanicalProperties: { uts: "420 MPa", yieldStrength: "260 MPa", elongation: "30%", hardness: "HRB 75" },
-    toleranceProperties: { thickness: "+/- 0.15 mm", width: "+/- 5 mm", flatness: "Standard IS:1079" },
-    bendProperties: { minimumRadius: "1.5T", rating: "Very Good", springback: "Low" },
-    chemicalComposition: { carbon: "≤0.15%", manganese: "≤0.60%", silicon: "≤0.35%", phosphorus: "≤0.030%", sulfur: "≤0.030%" }
-  },
-  carbonMedium: {
-    mechanicalProperties: { uts: "600 MPa", yieldStrength: "390 MPa", elongation: "20%", hardness: "HRB 88" },
-    toleranceProperties: { thickness: "+/- 0.12 mm", width: "+/- 4 mm", flatness: "Standard IS:1079" },
-    bendProperties: { minimumRadius: "2.0T", rating: "Good", springback: "Moderate" },
-    chemicalComposition: { carbon: "0.25–0.40%", manganese: "0.60–1.00%", silicon: "0.15–0.35%", phosphorus: "≤0.035%", sulfur: "≤0.035%" }
-  },
-  al6061: {
-    mechanicalProperties: { uts: "310 MPa", yieldStrength: "276 MPa", elongation: "12%", hardness: "HB 95" },
-    toleranceProperties: { thickness: "+/- 0.08 mm", width: "+/- 2 mm", flatness: "Standard" },
-    bendProperties: { minimumRadius: "3.0T", rating: "Fair", springback: "High" },
-    chemicalComposition: { aluminum: "95.8–98.6%", magnesium: "0.8–1.2%", silicon: "0.4–0.8%", iron: "≤0.7%", copper: "0.15–0.40%" }
-  },
-  al5052: {
-    mechanicalProperties: { uts: "228 MPa", yieldStrength: "193 MPa", elongation: "12%", hardness: "HB 60" },
-    toleranceProperties: { thickness: "+/- 0.05 mm", width: "+/- 1.5 mm", flatness: "Tight" },
-    bendProperties: { minimumRadius: "1.5T", rating: "Excellent", springback: "Moderate" },
-    chemicalComposition: { aluminum: "95.7–97.7%", magnesium: "2.2–2.8%", chromium: "0.15–0.35%", iron: "≤0.4%", silicon: "≤0.25%" }
-  },
-  znGalv: {
-    mechanicalProperties: { uts: "140 MPa", yieldStrength: "90 MPa", elongation: "35%", hardness: "HB 45" },
-    toleranceProperties: { thickness: "+/- 0.02 mm", width: "+/- 1 mm", flatness: "Flat" },
-    bendProperties: { minimumRadius: "1.0T", rating: "Excellent", springback: "Very Low" },
-    chemicalComposition: { zinc: "≥99.9%", lead: "≤0.005%", iron: "≤0.003%", cadmium: "≤0.003%" }
+  chemicalComposition: {
+    carbon: "0.15%",
+    manganese: "0.80%",
+    silicon: "0.20%",
+    phosphorus: "0.035%",
+    sulfur: "0.035%"
   }
 };
 
 async function main() {
-  console.log("🌱  Seeding MCMS database...");
+  console.log("🌱  Starting JSW MCMS Demo Data Seeding...\n");
 
-  // ── Roles ──────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 0 — Database Teardown
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("🗑️   Clearing existing database records...");
+  await prisma.auditLog.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.report.deleteMany({});
+  await prisma.comparisonRecord.deleteMany({});
+  await prisma.calculationItem.deleteMany({});
+  await prisma.calculation.deleteMany({});
+  await prisma.alloyComponent.deleteMany({});
+  await prisma.alloy.deleteMany({});
+  await prisma.priceHistory.deleteMany({});
+  await prisma.priceList.deleteMany({});
+  await prisma.mechanicalProperty.deleteMany({});
+  await prisma.chemicalProperty.deleteMany({});
+  await prisma.grade.deleteMany({});
+  await prisma.metal.deleteMany({});
+  await prisma.rawMaterial.deleteMany({});
+  await prisma.supplier.deleteMany({});
+  await prisma.gstSlab.deleteMany({});
+  await prisma.systemSetting.deleteMany({});
+  await prisma.jswProductCatalog.deleteMany({});
+  await prisma.refreshToken.deleteMany({});
+  await prisma.user.deleteMany({});
+  await prisma.role.deleteMany({});
+  console.log("   ✓ All tables cleared.\n");
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 1 — Roles
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("🔐  Seeding user roles...");
+  const roleNames = ["SUPER_ADMIN", "ADMIN", "EMPLOYEE", "USER"];
   const roleRows = await Promise.all(
-    [
-      ["ADMIN", "System administration, complete read/write access to masters, pricing, users, and settings"],
-      ["EMPLOYEE", "Operational access for calculations, comparisons, reports, and read-only masters"],
-      ["USER", "Standard costing calculation and grade comparison access"]
-    ].map(([name, description]) =>
-      prisma.role.upsert({ where: { name }, update: { description }, create: { name, description } })
-    )
-  );
-  const roles = Object.fromEntries(roleRows.map((role) => [role.name, role]));
-  const passwordHash = await bcrypt.hash("MCMS@2026", 12);
-
-  // ── Users ──────────────────────────────────────────────────────────────────
-  const [admin, procurement, finance, production, employee, user] = await Promise.all(
-    [
-      ["Admin User", "admin@jsw-mcms.local", "ADMIN", "IT Administration"],
-      ["Rahul Sharma", "procurement@jsw-mcms.local", "EMPLOYEE", "Procurement"],
-      ["Meera Iyer", "finance@jsw-mcms.local", "EMPLOYEE", "Finance"],
-      ["Neha Verma", "production@jsw-mcms.local", "EMPLOYEE", "Production"],
-      ["Standard Employee", "employee@jsw-mcms.local", "EMPLOYEE", "Operations"],
-      ["Standard User", "user@jsw-mcms.local", "USER", "Calculations"]
-    ].map(([name, email, roleName, department]) =>
-      prisma.user.upsert({
-        where: { email },
-        update: { name, roleId: roles[roleName].id, department, passwordHash },
-        create: { name, email, department, roleId: roles[roleName].id, passwordHash }
+    roleNames.map((name) =>
+      prisma.role.create({
+        data: {
+          name,
+          description: `${name} role for JSW costing boundaries.`
+        }
       })
     )
   );
+  const roles = Object.fromEntries(roleRows.map((r) => [r.name, r]));
+  console.log(`   ✓ ${roleRows.length} roles created.\n`);
 
-  // ── Metals ─────────────────────────────────────────────────────────────────
-  const [steel, iron, alloySteel, carbonSteel, copper, aluminum, zinc] = await Promise.all(
-    [
-      ["Stainless Steel", "MTL-SS", "Ferrous", "Austenitic stainless steel family with high corrosion resistance"],
-      ["Iron", "MTL-FE", "Ferrous", "Primary iron base metal for structural applications"],
-      ["Alloy Steel", "MTL-AS", "Alloy", "Chrome-moly and vanadium alloy steels for high-strength applications"],
-      ["Carbon Steel", "MTL-CS", "Ferrous", "Plain carbon steel grades for general structural and automotive use"],
-      ["Copper", "MTL-CU", "Non-Ferrous", "Pure copper for electrical and thermal conductivity applications"],
-      ["Aluminum", "MTL-AL", "Non-Ferrous", "Lightweight and corrosion-resistant aluminum for structural and cladding sheets"],
-      ["Zinc", "MTL-ZN", "Non-Ferrous", "Zinc metal for galvanization lines and protective coating layers"]
-    ].map(([name, code, category, description]) =>
-      prisma.metal.upsert({
-        where: { code },
-        update: { name, category, description },
-        create: { name, code, category, description }
-      })
-    )
-  );
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 2 — Users (Exactly 25 users across 5 departments)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("👤  Generating 25 JSW enterprise users...");
+  const passwordHash = await bcrypt.hash("MCMS@2026", 10);
 
-  // ── Grades ─────────────────────────────────────────────────────────────────
-  const [ss304, ss316, ss316l, lowAlloy, highAlloy, carbonLow, carbonMedium, al6061, al5052, znGalv] = await Promise.all([
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: steel.id, name: "SS304", subGrade: "" } },
-      update: { multiplier: "1.02", extraPrice: "0", ...props.ss304 },
-      create: { metalId: steel.id, name: "SS304", subGrade: "", multiplier: "1.02", extraPrice: "0", ...props.ss304 }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: steel.id, name: "SS316", subGrade: "" } },
-      update: { multiplier: "1.08", extraPrice: "2.50", ...props.ss316 },
-      create: { metalId: steel.id, name: "SS316", subGrade: "", multiplier: "1.08", extraPrice: "2.50", ...props.ss316 }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: steel.id, name: "SS316L", subGrade: "" } },
-      update: { multiplier: "1.10", extraPrice: "3.00", ...props.ss316l },
-      create: { metalId: steel.id, name: "SS316L", subGrade: "", multiplier: "1.10", extraPrice: "3.00", ...props.ss316l }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: alloySteel.id, name: "Low Alloy", subGrade: "" } },
-      update: { multiplier: "1.12", extraPrice: "4.00", ...props.lowAlloy },
-      create: { metalId: alloySteel.id, name: "Low Alloy", subGrade: "", multiplier: "1.12", extraPrice: "4.00", ...props.lowAlloy }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: alloySteel.id, name: "High Alloy", subGrade: "" } },
-      update: { multiplier: "1.22", extraPrice: "8.50", ...props.highAlloy },
-      create: { metalId: alloySteel.id, name: "High Alloy", subGrade: "", multiplier: "1.22", extraPrice: "8.50", ...props.highAlloy }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: carbonSteel.id, name: "Low Carbon", subGrade: "" } },
-      update: { multiplier: "1.00", extraPrice: "0", ...props.carbonLow },
-      create: { metalId: carbonSteel.id, name: "Low Carbon", subGrade: "", multiplier: "1.00", extraPrice: "0", ...props.carbonLow }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: carbonSteel.id, name: "Medium Carbon", subGrade: "" } },
-      update: { multiplier: "1.06", extraPrice: "1.50", ...props.carbonMedium },
-      create: { metalId: carbonSteel.id, name: "Medium Carbon", subGrade: "", multiplier: "1.06", extraPrice: "1.50", ...props.carbonMedium }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: aluminum.id, name: "Al6061", subGrade: "" } },
-      update: { multiplier: "1.05", extraPrice: "0", ...props.al6061 },
-      create: { metalId: aluminum.id, name: "Al6061", subGrade: "", multiplier: "1.05", extraPrice: "0", ...props.al6061 }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: aluminum.id, name: "Al5052", subGrade: "" } },
-      update: { multiplier: "1.02", extraPrice: "0", ...props.al5052 },
-      create: { metalId: aluminum.id, name: "Al5052", subGrade: "", multiplier: "1.02", extraPrice: "0", ...props.al5052 }
-    }),
-    prisma.grade.upsert({
-      where: { metalId_name_subGrade: { metalId: zinc.id, name: "Zn-Galv", subGrade: "" } },
-      update: { multiplier: "1.00", extraPrice: "0", ...props.znGalv },
-      create: { metalId: zinc.id, name: "Zn-Galv", subGrade: "", multiplier: "1.00", extraPrice: "0", ...props.znGalv }
-    })
-  ]);
-
-  // ── Raw Materials ──────────────────────────────────────────────────────────
-  const rawMaterials = await Promise.all(
-    [
-      ["Iron Pellets", "RM-FE", "Primary iron feed material for EAF process"],
-      ["Nickel", "RM-NI", "Nickel addition for austenitic stainless steel"],
-      ["Chromium", "RM-CR", "Chromium alloy feed for corrosion resistance"],
-      ["Scrap Blend", "RM-SCR", "Approved process scrap from JSW facility"],
-      ["Molybdenum", "RM-MO", "Molybdenum addition for pitting resistance in SS316"],
-      ["Manganese", "RM-MN", "Manganese feed for alloy steel grades"],
-      ["Ferrosilicon", "RM-FSI", "Silicon carrier for deoxidation"],
-      ["Lime", "RM-LM", "Flux material for slag control"]
-    ].map(([name, code, description]) =>
-      prisma.rawMaterial.upsert({ where: { code }, update: { name, description }, create: { name, code, description } })
-    )
-  );
-  const raw = Object.fromEntries(rawMaterials.map((item) => [item.code, item]));
-
-  // ── Suppliers ─────────────────────────────────────────────────────────────
-  const [supplier1, supplier2] = await Promise.all([
-    prisma.supplier.upsert({
-      where: { code: "SUP-JSW-01" },
-      update: { name: "JSW Approved Supply Desk", email: "supplierdesk@jsw.local" },
-      create: {
-        name: "JSW Approved Supply Desk", code: "SUP-JSW-01", email: "supplierdesk@jsw.local",
-        contactName: "Anita Rao", phone: "+91 22 5550 2026"
-      }
-    }),
-    prisma.supplier.upsert({
-      where: { code: "SUP-ESSAR-02" },
-      update: { name: "Essar Steel India", email: "procurement@essar.local" },
-      create: {
-        name: "Essar Steel India", code: "SUP-ESSAR-02", email: "procurement@essar.local",
-        contactName: "Vikram Mehta", phone: "+91 20 5550 3030"
-      }
-    })
-  ]);
-
-  // ── Price Lists ────────────────────────────────────────────────────────────
-  const priceSeed: [string | null, string | null, string, string, string][] = [
-    [steel.id, null, "62.50", "JSW-MASTER-SS", "SUP-JSW-01"],
-    [iron.id, null, "80.00", "JSW-MASTER-FE", "SUP-JSW-01"],
-    [alloySteel.id, null, "72.00", "JSW-MASTER-AS", "SUP-JSW-01"],
-    [carbonSteel.id, null, "48.00", "JSW-MASTER-CS", "SUP-JSW-01"],
-    [copper.id, null, "720.00", "LME-SPOT-CU", "SUP-ESSAR-02"],
-    [aluminum.id, null, "185.00", "JSW-MASTER-AL", "SUP-JSW-01"],
-    [zinc.id, null, "240.00", "JSW-MASTER-ZN", "SUP-JSW-01"],
-    [null, raw["RM-FE"].id, "80.00", "JSW-RM-FE", "SUP-JSW-01"],
-    [null, raw["RM-NI"].id, "850.00", "LME-NI", "SUP-ESSAR-02"],
-    [null, raw["RM-CR"].id, "650.00", "LME-CR", "SUP-ESSAR-02"],
-    [null, raw["RM-SCR"].id, "35.00", "JSW-SCRAP", "SUP-JSW-01"],
-    [null, raw["RM-MO"].id, "1200.00", "LME-MO", "SUP-ESSAR-02"],
-    [null, raw["RM-MN"].id, "185.00", "JSW-MN", "SUP-JSW-01"],
-    [null, raw["RM-FSI"].id, "90.00", "JSW-FSI", "SUP-JSW-01"],
-    [null, raw["RM-LM"].id, "12.00", "JSW-LIME", "SUP-JSW-01"]
+  const userDefinitions = [
+    // Presentation demo accounts
+    { name: "Admin User", email: "admin@jsw-mcms.local", role: "ADMIN", dept: "IT Administration" },
+    { name: "Employee User", email: "employee@jsw-mcms.local", role: "EMPLOYEE", dept: "Cost Engineering" },
+    { name: "Standard User", email: "user@jsw-mcms.local", role: "USER", dept: "Client Services" },
+    // 1 SUPER_ADMIN
+    { name: "Sajjan Jindal", email: "superadmin@jsw.in", role: "SUPER_ADMIN", dept: "Operations" },
+    // 3 ADMIN
+    { name: "Demo Admin", email: "demo.admin@jsw.in", role: "ADMIN", dept: "Operations" },
+    { name: "Amit Banerjee", email: "amit.banerjee@jsw.in", role: "ADMIN", dept: "Finance" },
+    { name: "Sunita Reddy", email: "sunita.reddy@jsw.in", role: "ADMIN", dept: "Procurement" },
+    // 6 EMPLOYEE
+    { name: "Arjun Mehta", email: "arjun.mehta@jsw.in", role: "EMPLOYEE", dept: "Procurement" },
+    { name: "Priya Nair", email: "priya.nair@jsw.in", role: "EMPLOYEE", dept: "Production" },
+    { name: "Suresh Iyer", email: "suresh.iyer@jsw.in", role: "EMPLOYEE", dept: "Finance" },
+    { name: "Rahul Sharma", email: "rahul.sharma@jsw.in", role: "EMPLOYEE", dept: "Quality" },
+    { name: "Kiran Joshi", email: "kiran.joshi@jsw.in", role: "EMPLOYEE", dept: "Operations" },
+    { name: "Vikas Sen", email: "vikas.sen@jsw.in", role: "EMPLOYEE", dept: "Procurement" },
+    // 15 USER
+    { name: "Rajesh Kumar", email: "user1@jsw.in", role: "USER", dept: "Production" },
+    { name: "Neha Gupta", email: "user2@jsw.in", role: "USER", dept: "Procurement" },
+    { name: "Sanjay Shah", email: "user3@jsw.in", role: "USER", dept: "Operations" },
+    { name: "Aditi Rao", email: "user4@jsw.in", role: "USER", dept: "Quality" },
+    { name: "Manoj Tiwari", email: "user5@jsw.in", role: "USER", dept: "Finance" },
+    { name: "Pooja Patel", email: "user6@jsw.in", role: "USER", dept: "Production" },
+    { name: "Rohan Varma", email: "user7@jsw.in", role: "USER", dept: "Procurement" },
+    { name: "Divya Mishra", email: "user8@jsw.in", role: "USER", dept: "Operations" },
+    { name: "Anil Kapoor", email: "user9@jsw.in", role: "USER", dept: "Quality" },
+    { name: "Swati Deshmukh", email: "user10@jsw.in", role: "USER", dept: "Finance" },
+    { name: "Vijay Mallya", email: "user11@jsw.in", role: "USER", dept: "Production" },
+    { name: "Karan Johar", email: "user12@jsw.in", role: "USER", dept: "Procurement" },
+    { name: "Gaurav Chopra", email: "user13@jsw.in", role: "USER", dept: "Operations" },
+    { name: "Preeti Zinta", email: "user14@jsw.in", role: "USER", dept: "Quality" },
+    { name: "Aamir Khan", email: "user15@jsw.in", role: "USER", dept: "Finance" }
   ];
 
+  const userRows = await Promise.all(
+    userDefinitions.map((ud) =>
+      prisma.user.create({
+        data: {
+          name: ud.name,
+          email: ud.email,
+          passwordHash,
+          department: ud.dept,
+          status: "ACTIVE",
+          roleId: roles[ud.role].id,
+          lastLoginAt: daysAgo(Math.floor(randomRange(1, 10)))
+        }
+      })
+    )
+  );
+  console.log(`   ✓ ${userRows.length} users seeded.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 3 — Suppliers
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("🏭  Seeding industrial suppliers...");
+  const supplierData = [
+    { name: "JSW Steel Ltd. (Vijayanagar)", code: "SUP-JSW-VNJ", email: "sales.vnj@jsw.in" },
+    { name: "JSW Steel Ltd. (Dolvi)", code: "SUP-JSW-DLV", email: "sales.dlv@jsw.in" },
+    { name: "JSW Steel Ltd. (Salem)", code: "SUP-JSW-SLM", email: "sales.slm@jsw.in" },
+    { name: "NMDC Iron Ore Supply", code: "SUP-NMDC-ORE", email: "logistics@nmdc.co.in" }
+  ];
+  const supplierRows = await Promise.all(
+    supplierData.map((s) => prisma.supplier.create({ data: s }))
+  );
+  const suppliers = Object.fromEntries(supplierRows.map((s) => [s.code, s]));
+  console.log(`   ✓ ${supplierRows.length} suppliers created.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 4 — Metals (52 JSW metals)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("⚙️   Generating 52 JSW catalog metals...");
+  const metalSpecs = [
+    { name: "Mild Steel Hot Rolled Coil (E250A)", code: "JSW-MS-HR-COIL-E250A", category: "Ferrous", price: 63.75 },
+    { name: "Mild Steel Hot Rolled Sheet (E350)", code: "JSW-MS-HR-SHEET-E350", category: "Ferrous", price: 65.20 },
+    { name: "Mild Steel Hot Rolled Plate (E250)", code: "JSW-MS-HR-PLATE-E250", category: "Ferrous", price: 67.50 },
+    { name: "Mild Steel Cold Rolled Coil (D)", code: "JSW-MS-CR-COIL-D", category: "Ferrous", price: 68.40 },
+    { name: "Mild Steel Cold Rolled Sheet (DD)", code: "JSW-MS-CR-SHEET-DD", category: "Ferrous", price: 70.10 },
+    { name: "Mild Steel Cold Rolled Extra Deep (EDD)", code: "JSW-MS-CR-EDD", category: "Ferrous", price: 71.50 },
+    { name: "TMT Rebar Fe500D Construction", code: "JSW-TMT-FE500D", category: "Ferrous", price: 58.90 },
+    { name: "TMT Rebar Fe550D High Strength", code: "JSW-TMT-FE550D", category: "Ferrous", price: 60.30 },
+    { name: "TMT Rebar Fe600 Super High Strength", code: "JSW-TMT-FE600", category: "Ferrous", price: 62.10 },
+    { name: "Galvanized Plain Coil (GP)", code: "JSW-GI-GP-COIL", category: "Galvanized", price: 72.80 },
+    { name: "Galvanized Corrugated Sheet (GC)", code: "JSW-GI-GC-SHEET", category: "Galvanized", price: 73.50 },
+    { name: "Galvalume Coil (GL)", code: "JSW-GL-COIL", category: "Galvanized", price: 74.50 },
+    { name: "Galvannealed Auto Sheet (GA)", code: "JSW-GA-AUTO-SHEET", category: "Galvanized", price: 78.50 },
+    { name: "Prepainted Galvanized Coil (PPGI)", code: "JSW-PPGI-COIL", category: "Galvanized", price: 84.00 },
+    { name: "Prepainted Galvalume Coil (PPGL)", code: "JSW-PPGL-COIL", category: "Galvanized", price: 86.50 },
+    { name: "Color Coated Sheet (PPGI-COLOR)", code: "JSW-COLOR-SHEET", category: "Galvanized", price: 85.00 },
+    { name: "Silicon Steel Electrical M43", code: "JSW-ES-M43", category: "Specialty", price: 95.00 },
+    { name: "Silicon Steel Electrical M36", code: "JSW-ES-M36", category: "Specialty", price: 98.20 },
+    { name: "Silicon Steel Electrical M27", code: "JSW-ES-M27", category: "Specialty", price: 102.50 },
+    { name: "CRGO Oriented Silicon Steel", code: "JSW-CRGO-ORIENTED", category: "Specialty", price: 115.00 },
+    { name: "CRNGO Non-Oriented Silicon Steel", code: "JSW-CRNGO-NONORIENTED", category: "Specialty", price: 108.00 },
+    { name: "Structural Steel MS Angle", code: "JSW-STRUCT-ANGLE", category: "Ferrous", price: 66.80 },
+    { name: "Structural Steel MS Channel", code: "JSW-STRUCT-CHANNEL", category: "Ferrous", price: 67.90 },
+    { name: "Structural Steel H-Beam", code: "JSW-STRUCT-HBEAM", category: "Ferrous", price: 71.40 },
+    { name: "Structural Steel I-Beam", code: "JSW-STRUCT-IBEAM", category: "Ferrous", price: 70.80 },
+    { name: "Structural Steel Welded Section", code: "JSW-STRUCT-WELDED", category: "Ferrous", price: 72.50 },
+    { name: "Stainless Steel Grade 304", code: "JSW-SS-304", category: "Stainless", price: 165.00 },
+    { name: "Stainless Steel Grade 316", code: "JSW-SS-316", category: "Stainless", price: 220.00 },
+    { name: "Stainless Steel Grade 321", code: "JSW-SS-321", category: "Stainless", price: 185.00 },
+    { name: "Stainless Steel Grade 409", code: "JSW-SS-409", category: "Stainless", price: 120.00 },
+    { name: "Stainless Steel Grade 430", code: "JSW-SS-430", category: "Stainless", price: 135.00 },
+    { name: "Duplex Stainless Steel 2205", code: "JSW-SS-DUPLEX-2205", category: "Stainless", price: 290.00 },
+    { name: "Super Duplex Stainless Steel 2507", code: "JSW-SS-SDUPLEX-2507", category: "Stainless", price: 340.00 },
+    { name: "Medium Carbon Steel C45", code: "JSW-CS-C45", category: "Ferrous", price: 60.50 },
+    { name: "High Carbon Steel C80", code: "JSW-CS-C80", category: "Ferrous", price: 65.20 },
+    { name: "High-Strength Low-Alloy S600", code: "JSW-HSLA-S600", category: "Alloy", price: 85.00 },
+    { name: "Alloy Steel Chrome Moly 13CrMo44", code: "JSW-AS-13CRMO44", category: "Alloy", price: 110.00 },
+    { name: "Alloy Steel Chrome Moly 15CrMo6", code: "JSW-AS-15CRMO6", category: "Alloy", price: 118.00 },
+    { name: "Tool Steel High Speed M2", code: "JSW-TS-M2", category: "Tool", price: 350.00 },
+    { name: "Tool Steel Cold Work D2", code: "JSW-TS-D2", category: "Tool", price: 280.00 },
+    { name: "Tool Steel Hot Work H13", code: "JSW-TS-H13", category: "Tool", price: 310.00 },
+    { name: "Spring Steel Carbon SUP9", code: "JSW-SPRING-SUP9", category: "Alloy", price: 88.00 },
+    { name: "Spring Steel Carbon SUP11A", code: "JSW-SPRING-SUP11A", category: "Alloy", price: 92.50 },
+    { name: "Nickel Alloy Monel 400", code: "JSW-ALY-MONEL400", category: "Alloy", price: 480.00 },
+    { name: "Nickel Alloy Inconel 625", code: "JSW-ALY-INCONEL625", category: "Alloy", price: 650.00 },
+    { name: "Nickel Alloy Incoloy 800", code: "JSW-ALY-INCOLOY800", category: "Alloy", price: 540.00 },
+    { name: "Nickel Alloy Hastelloy C276", code: "JSW-ALY-HASTELLOYC276", category: "Alloy", price: 720.00 },
+    { name: "Titanium Grade 2", code: "JSW-TI-GR2", category: "Specialty", price: 850.00 },
+    { name: "Titanium Grade 5", code: "JSW-TI-GR5", category: "Specialty", price: 1100.00 },
+    { name: "Boiler Quality Plate (IS 2002)", code: "JSW-BQ-PLATE-IS2002", category: "Ferrous", price: 58.70 },
+    { name: "Weathering Steel Corten-A", code: "JSW-CORTEN-A", category: "Alloy", price: 92.40 },
+    { name: "Weathering Steel Corten-B", code: "JSW-CORTEN-B", category: "Alloy", price: 94.80 }
+  ];
+
+  const metalRows = await Promise.all(
+    metalSpecs.map((spec) =>
+      prisma.metal.create({
+        data: {
+          name: spec.name,
+          code: spec.code,
+          category: spec.category,
+          unit: "kg",
+          status: "ACTIVE",
+          description: `JSW Industrial Spec ${spec.name} conforming to IS standard.`
+        }
+      })
+    )
+  );
+
+  // Seed active prices for all metals
   await Promise.all(
-    priceSeed.map(async ([metalId, rawMaterialId, price, source, supplierCode]) => {
-      const supplierId = supplierCode === "SUP-JSW-01" ? supplier1.id : supplier2.id;
-      const existing = await prisma.priceList.findFirst({
-        where: { metalId: metalId || undefined, rawMaterialId: rawMaterialId || undefined, active: true }
-      });
-      if (!existing) {
-        await prisma.priceList.create({
-          data: {
-            metalId: metalId || undefined,
-            rawMaterialId: rawMaterialId || undefined,
-            supplierId,
-            pricePerUnit: price,
-            source,
-            effectiveFrom: new Date("2026-05-01T00:00:00.000Z")
-          }
-        });
-      }
-    })
+    metalRows.map((metal, idx) =>
+      prisma.priceList.create({
+        data: {
+          metalId: metal.id,
+          pricePerUnit: metalSpecs[idx].price.toFixed(4),
+          currency: "INR",
+          unit: "kg",
+          source: "JSW-MASTER-RATE-2026",
+          effectiveFrom: daysAgo(60),
+          active: true,
+          status: "APPROVED",
+          supplierId: suppliers["SUP-JSW-VNJ"].id
+        }
+      })
+    )
   );
+  console.log(`   ✓ ${metalRows.length} metals created with active pricing sheets.\n`);
 
-  // ── Alloys ────────────────────────────────────────────────────────────────
-  const [alloySS304, alloySS316, alloyCarbonSteel, alloyAlloySteel] = await Promise.all([
-    prisma.alloy.upsert({
-      where: { code: "ALY-SS304-BATCH" },
-      update: { name: "SS304 Batch Alloy", type: "Stainless Steel", createdById: procurement.id },
-      create: { name: "SS304 Batch Alloy", code: "ALY-SS304-BATCH", type: "Stainless Steel", createdById: procurement.id }
-    }),
-    prisma.alloy.upsert({
-      where: { code: "ALY-SS316-BATCH" },
-      update: { name: "SS316 Marine Grade Alloy", type: "Stainless Steel", createdById: procurement.id },
-      create: { name: "SS316 Marine Grade Alloy", code: "ALY-SS316-BATCH", type: "Stainless Steel", createdById: procurement.id }
-    }),
-    prisma.alloy.upsert({
-      where: { code: "ALY-CS-STD" },
-      update: { name: "Carbon Steel Standard Blend", type: "Carbon Steel", createdById: production.id },
-      create: { name: "Carbon Steel Standard Blend", code: "ALY-CS-STD", type: "Carbon Steel", createdById: production.id }
-    }),
-    prisma.alloy.upsert({
-      where: { code: "ALY-AS-HIGH" },
-      update: { name: "High-Strength Alloy Steel", type: "Alloy Steel", createdById: production.id },
-      create: { name: "High-Strength Alloy Steel", code: "ALY-AS-HIGH", type: "Alloy Steel", createdById: production.id }
-    })
-  ]);
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 5 — Grades & Physical Properties (Exactly 104 grades mapped to metals)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📋  Generating 104 grades with multi-tier properties and physical mappings...");
+  const gradeRows: any[] = [];
+  for (let i = 0; i < metalRows.length; i++) {
+    const metal = metalRows[i];
+    
+    // Grade 1 - Standard
+    const grade1 = await prisma.grade.create({
+      data: {
+        metalId: metal.id,
+        name: `${metal.name} G-Standard`,
+        subGrade: "STD",
+        multiplier: "1.0000",
+        extraPrice: "0.00",
+        ...baseTechnicalProperties,
+        status: "ACTIVE"
+      }
+    });
 
-  // Alloy components
-  await prisma.alloyComponent.deleteMany({ where: { alloyId: { in: [alloySS304.id, alloySS316.id, alloyCarbonSteel.id, alloyAlloySteel.id] } } });
-  await prisma.alloyComponent.createMany({
-    data: [
-      // SS304 batch: 70% steel, 20% nickel, 10% chromium
-      { alloyId: alloySS304.id, metalId: steel.id, gradeId: ss304.id, compositionPercent: "70" },
-      { alloyId: alloySS304.id, rawMaterialId: raw["RM-NI"].id, compositionPercent: "20" },
-      { alloyId: alloySS304.id, rawMaterialId: raw["RM-CR"].id, compositionPercent: "10" },
-      // SS316 batch: 65% steel, 20% nickel, 10% chromium, 5% molybdenum
-      { alloyId: alloySS316.id, metalId: steel.id, gradeId: ss316.id, compositionPercent: "65" },
-      { alloyId: alloySS316.id, rawMaterialId: raw["RM-NI"].id, compositionPercent: "20" },
-      { alloyId: alloySS316.id, rawMaterialId: raw["RM-CR"].id, compositionPercent: "10" },
-      { alloyId: alloySS316.id, rawMaterialId: raw["RM-MO"].id, compositionPercent: "5" },
-      // Carbon Steel: 80% CS, 15% iron pellets, 5% scrap
-      { alloyId: alloyCarbonSteel.id, metalId: carbonSteel.id, gradeId: carbonLow.id, compositionPercent: "80" },
-      { alloyId: alloyCarbonSteel.id, rawMaterialId: raw["RM-FE"].id, compositionPercent: "15" },
-      { alloyId: alloyCarbonSteel.id, rawMaterialId: raw["RM-SCR"].id, compositionPercent: "5" },
-      // Alloy Steel: 70% AS, 20% iron, 7% manganese, 3% ferrosilicon
-      { alloyId: alloyAlloySteel.id, metalId: alloySteel.id, gradeId: highAlloy.id, compositionPercent: "70" },
-      { alloyId: alloyAlloySteel.id, rawMaterialId: raw["RM-FE"].id, compositionPercent: "20" },
-      { alloyId: alloyAlloySteel.id, rawMaterialId: raw["RM-MN"].id, compositionPercent: "7" },
-      { alloyId: alloyAlloySteel.id, rawMaterialId: raw["RM-FSI"].id, compositionPercent: "3" }
-    ]
-  });
+    await prisma.mechanicalProperty.create({
+      data: {
+        gradeId: grade1.id,
+        uts: "410-520 MPa",
+        yieldStrength: "250 MPa min",
+        elongation: "23%",
+        hardness: "HRB 70-80",
+        thicknessTolerance: "+/- 0.08 mm",
+        widthTolerance: "+/- 3 mm",
+        flatnessTolerance: "Standard IS:1852",
+        minBendRadius: "1.5T",
+        bendRating: "Good",
+        springback: "Low"
+      }
+    });
 
-  // ── Calculations ──────────────────────────────────────────────────────────
-  const calcSeeds: Array<{
-    batchId: string; name: string; mode: string; userId: string; alloyId?: string;
-    totalQuantity: string; baseCost: string; finalCost: string; status: "COMPLETED" | "DRAFT";
-  }> = [
-    {
-      batchId: "BATCH-1023", name: "SS304 Cost Run – May 2026", mode: "alloy",
-      userId: procurement.id, alloyId: alloySS304.id,
-      totalQuantity: "1000", baseCost: "63750.0000", finalCost: "63750.0000", status: "COMPLETED"
-    },
-    {
-      batchId: "BATCH-1024", name: "SS316 Marine Grade Costing", mode: "alloy",
-      userId: procurement.id, alloyId: alloySS316.id,
-      totalQuantity: "500", baseCost: "42560.0000", finalCost: "42560.0000", status: "COMPLETED"
-    },
-    {
-      batchId: "BATCH-1025", name: "Carbon Steel Structural Run", mode: "metal",
-      userId: production.id, alloyId: alloyCarbonSteel.id,
-      totalQuantity: "2000", baseCost: "97200.0000", finalCost: "97200.0000", status: "COMPLETED"
-    },
-    {
-      batchId: "BATCH-1026", name: "High-Strength Alloy Steel Q2", mode: "alloy",
-      userId: finance.id, alloyId: alloyAlloySteel.id,
-      totalQuantity: "750", baseCost: "55800.0000", finalCost: "55800.0000", status: "COMPLETED"
-    },
-    {
-      batchId: "BATCH-1027", name: "SS304 Draft – June Forecast", mode: "metal",
-      userId: procurement.id,
-      totalQuantity: "1500", baseCost: "93750.0000", finalCost: "93750.0000", status: "DRAFT"
-    }
+    await prisma.chemicalProperty.create({
+      data: {
+        gradeId: grade1.id,
+        carbon: "0.15%",
+        manganese: "0.80%",
+        silicon: "0.20%",
+        chromium: "0.05%",
+        nickel: "0.05%",
+        molybdenum: "0.01%",
+        phosphorus: "0.035%",
+        sulfur: "0.035%"
+      }
+    });
+
+    // Grade 2 - Premium
+    const grade2 = await prisma.grade.create({
+      data: {
+        metalId: metal.id,
+        name: `${metal.name} G-Premium`,
+        subGrade: "PREM",
+        multiplier: (1.05 + i * 0.003).toFixed(4),
+        extraPrice: (5.00 + i * 0.75).toFixed(2),
+        ...baseTechnicalProperties,
+        status: "ACTIVE"
+      }
+    });
+
+    await prisma.mechanicalProperty.create({
+      data: {
+        gradeId: grade2.id,
+        uts: "450-560 MPa",
+        yieldStrength: "280 MPa min",
+        elongation: "20%",
+        hardness: "HRB 75-85",
+        thicknessTolerance: "+/- 0.06 mm",
+        widthTolerance: "+/- 2 mm",
+        flatnessTolerance: "Standard IS:1852",
+        minBendRadius: "2.0T",
+        bendRating: "Excellent",
+        springback: "Low"
+      }
+    });
+
+    await prisma.chemicalProperty.create({
+      data: {
+        gradeId: grade2.id,
+        carbon: "0.18%",
+        manganese: "0.95%",
+        silicon: "0.22%",
+        chromium: "0.10%",
+        nickel: "0.10%",
+        molybdenum: "0.02%",
+        phosphorus: "0.030%",
+        sulfur: "0.030%"
+      }
+    });
+
+    gradeRows.push(grade1, grade2);
+  }
+  console.log(`   ✓ ${gradeRows.length} grades seeded (2 grades per metal with mechanical/chemical records).\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 6 — Raw Materials
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("🪨  Generating raw material composition agents...");
+  const rawMaterialSpecs = [
+    { name: "Iron Ore Pellets", code: "RM-FE-PEL", price: 12.50 },
+    { name: "Prime Heavy Scrap HMS1", code: "RM-SCRAP", price: 32.00 },
+    { name: "Ferro-Manganese FeMn75", code: "RM-FEMN", price: 85.00 },
+    { name: "Ferro-Silicon FeSi75", code: "RM-FESI", price: 92.00 },
+    { name: "Ferro-Chrome FeCr60", code: "RM-FECR", price: 110.00 },
+    { name: "Pure Nickel Cathodes", code: "RM-NI", price: 1250.00 },
+    { name: "Carbon Additives Coke", code: "RM-CARBON", price: 18.00 },
+    { name: "Lime Flux Calcined", code: "RM-LIME", price: 8.50 },
+    { name: "Niobium Micro-Alloy", code: "RM-NB", price: 3400.00 },
+    { name: "Vanadium pentoxide", code: "RM-V", price: 2100.00 }
   ];
 
-  const snapshot = {
-    version: 1,
-    mode: "alloy",
-    pricedAt: new Date("2026-05-15T09:00:00.000Z").toISOString(),
-    masterLocked: true,
-    charges: [],
-    items: []
-  };
+  const rawRows = await Promise.all(
+    rawMaterialSpecs.map((spec) =>
+      prisma.rawMaterial.create({
+        data: {
+          name: spec.name,
+          code: spec.code,
+          unit: "kg",
+          status: "ACTIVE",
+          description: `Base industrial input element ${spec.name}`
+        }
+      })
+    )
+  );
 
-  for (const calc of calcSeeds) {
-    const existing = await prisma.calculation.findUnique({ where: { batchId: calc.batchId } });
-    if (!existing) {
+  // Seed active prices for raw materials
+  await Promise.all(
+    rawRows.map((rm, idx) =>
+      prisma.priceList.create({
+        data: {
+          rawMaterialId: rm.id,
+          pricePerUnit: rawMaterialSpecs[idx].price.toFixed(4),
+          currency: "INR",
+          unit: "kg",
+          source: "JSW-RAW-VALUATION-2026",
+          effectiveFrom: daysAgo(60),
+          active: true,
+          status: "APPROVED",
+          supplierId: suppliers["SUP-NMDC-ORE"].id
+        }
+      })
+    )
+  );
+  console.log(`   ✓ ${rawRows.length} raw materials created with active valuation cards.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 7 — Price History (Exactly 200 historical changes spread over 12 months)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📈  Generating 200 historical price fluctuations (last 12 months)...");
+  const priceHistoryCreators = userRows.filter((u) => u.email.endsWith("admin@jsw.in") || u.email.includes("arjun"));
+  const priceHistoryData: any[] = [];
+
+  for (let i = 0; i < 200; i++) {
+    const isMetal = Math.random() > 0.3;
+    const targetDate = daysAgo(Math.floor(randomRange(1, 365)));
+    const creator = pickRandom(priceHistoryCreators);
+
+    if (isMetal) {
+      const metalIdx = Math.floor(randomRange(0, metalRows.length));
+      const metal = metalRows[metalIdx];
+      const basePrice = metalSpecs[metalIdx].price;
+      const oldPrice = basePrice * randomRange(0.88, 0.98);
+      const newPrice = oldPrice * randomRange(0.96, 1.06);
+      const changePct = ((newPrice - oldPrice) / oldPrice) * 100;
+
+      priceHistoryData.push({
+        metalId: metal.id,
+        oldPrice: oldPrice.toFixed(4),
+        newPrice: newPrice.toFixed(4),
+        reason: `LME Market correction of ${changePct.toFixed(2)}% | Effective ${targetDate.toLocaleDateString()}`,
+        updatedById: creator.id,
+        updatedAt: targetDate
+      });
+    } else {
+      const rmIdx = Math.floor(randomRange(0, rawRows.length));
+      const rawMat = rawRows[rmIdx];
+      const basePrice = rawMaterialSpecs[rmIdx].price;
+      const oldPrice = basePrice * randomRange(0.90, 0.98);
+      const newPrice = oldPrice * randomRange(0.95, 1.05);
+      const changePct = ((newPrice - oldPrice) / oldPrice) * 100;
+
+      priceHistoryData.push({
+        rawMaterialId: rawMat.id,
+        oldPrice: oldPrice.toFixed(4),
+        newPrice: newPrice.toFixed(4),
+        reason: `Global raw commodity update ${changePct.toFixed(2)}% | Applied ${targetDate.toLocaleDateString()}`,
+        updatedById: creator.id,
+        updatedAt: targetDate
+      });
+    }
+  }
+
+  // Write price history
+  for (const ph of priceHistoryData) {
+    await prisma.priceHistory.create({
+      data: ph
+    });
+  }
+  console.log(`   ✓ ${priceHistoryData.length} price history changes successfully generated.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 8 — Calculations (100 COMPLETED, 40 DRAFT, 20 APPROVED = 160 total)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("🧮  Generating 160 calculations (100 COMPLETED, 40 DRAFT, 20 APPROVED)...");
+  
+  const calculationStatuses: { status: CalculationStatus; count: number }[] = [
+    { status: "COMPLETED", count: 100 },
+    { status: "DRAFT", count: 40 },
+    { status: "APPROVED", count: 20 }
+  ];
+
+  const productPrefixes = ["JSW NeoSteel", "JSW AutoForm", "JSW BoilerGuard", "JSW StrucMax", "JSW ArmorPlat", "JSW GalvanShield"];
+  let calcIndex = 0;
+
+  for (const item of calculationStatuses) {
+    console.log(`   └─ Generating ${item.count} ${item.status} calculations...`);
+    for (let c = 0; c < item.count; c++) {
+      calcIndex++;
+      const user = pickRandom(userRows);
+      const metalIdx = Math.floor(randomRange(0, metalRows.length));
+      const metal = metalRows[metalIdx];
+      
+      // Select standard or premium grade mapped to this metal
+      const mGrades = gradeRows.filter((g) => g.metalId === metal.id);
+      const grade = pickRandom(mGrades);
+
+      // Quantities scale: 200kg to 5000kg. High value metals get lower quantity, ferrous gets higher
+      let quantity = Math.floor(randomRange(500, 4500));
+      if (metal.category === "Alloy" || metal.category === "Stainless") {
+        quantity = Math.floor(randomRange(250, 1500));
+      } else if (metal.code.includes("MONEL")) {
+        quantity = Math.floor(randomRange(50, 300)); // monel is very expensive (₹480/kg)
+      }
+
+      // Calculation pricing variables
+      const metalBaseRate = metalSpecs[metalIdx].price;
+      const multiplier = parseFloat(grade.multiplier.toString());
+      const additionalCost = parseFloat(grade.extraPrice.toString());
+      
+      const itemUnitPrice = metalBaseRate * multiplier + additionalCost;
+      const mainItemBaseCost = quantity * itemUnitPrice;
+
+      // Add a couple of raw material elements as alloys
+      const rm1 = pickRandom(rawRows);
+      const rmUnitPrice = rawMaterialSpecs.find((spec) => spec.code === rm1.code)!.price;
+      const rm1Qty = quantity * 0.10; // 10% scrap/flux
+      const rm1BaseCost = rm1Qty * rmUnitPrice;
+
+      const baseCostVal = mainItemBaseCost + rm1BaseCost;
+
+      // Add JSW standardized logistics surcharges (1.5% percent levy + 250 INR flat handling)
+      const logisticsLevy = baseCostVal * 0.015;
+      const handlingFlat = 250.00;
+      
+      const subTotal = baseCostVal + logisticsLevy + handlingFlat;
+      const gstAmountVal = subTotal * 0.18;
+      const finalCostVal = subTotal + gstAmountVal;
+
+      // Ensure that at least 14 calculations (which fall in COMPLETED) are seeded specifically for the last 7 days (2 per day)
+      // to keep dashboard chart active.
+      let createdDate: Date;
+      if (item.status === "COMPLETED" && c < 14) {
+        const dayOffset = Math.floor(c / 2); // 0, 0, 1, 1, 2, 2, ..., 6, 6
+        createdDate = daysAgo(dayOffset);
+        createdDate.setHours(Math.floor(randomRange(9, 17)), Math.floor(randomRange(0, 59)));
+      } else {
+        createdDate = daysAgo(Math.floor(randomRange(1, 180)));
+      }
+
+      // Enforce user cost boundary check
+      // Target: Material Cost: 10,000 - 250,000 | Final Cost: 15,000 - 500,000
+      // If cost exceeds maximum ranges, scale it down
+      let baseCostFinal = baseCostVal;
+      let finalCostFinal = finalCostVal;
+      let gstFinal = gstAmountVal;
+      let finalQty = quantity;
+
+      if (baseCostFinal > 250000) {
+        const factor = 240000 / baseCostFinal;
+        finalQty = Math.floor(quantity * factor);
+        baseCostFinal = baseCostFinal * factor;
+        gstFinal = gstFinal * factor;
+        finalCostFinal = finalCostFinal * factor;
+      } else if (baseCostFinal < 10000) {
+        const factor = 11000 / baseCostFinal;
+        finalQty = Math.floor(quantity * factor);
+        baseCostFinal = baseCostFinal * factor;
+        gstFinal = gstFinal * factor;
+        finalCostFinal = finalCostFinal * factor;
+      }
+
+      const batchId = `JSW-BATCH-2026-${calcIndex.toString().padStart(4, "0")}`;
+      const productName = `${pickRandom(productPrefixes)} - ${metal.code} Lot-${Math.floor(randomRange(10, 99))}`;
+
+      const snapshot = {
+        version: 1,
+        name: productName,
+        mode: "alloy",
+        pricedAt: createdDate.toISOString(),
+        masterLocked: true,
+        currency: "INR",
+        weightUnit: "kg",
+        charges: [
+          { label: "Logistics Surcharge", rate: 1.5, type: "percent" },
+          { label: "Handling Fee", rate: 250, type: "flat" }
+        ]
+      };
+
+      const approver = pickRandom(userRows.filter((u) => u.roleId === roles["ADMIN"].id || u.roleId === roles["SUPER_ADMIN"].id));
+
       await prisma.calculation.create({
         data: {
-          batchId: calc.batchId,
-          name: calc.name,
-          mode: calc.mode,
-          userId: calc.userId,
-          alloyId: calc.alloyId,
-          totalQuantity: calc.totalQuantity,
-          baseCost: calc.baseCost,
-          finalCost: calc.finalCost,
-          snapshot: { ...snapshot, mode: calc.mode, name: calc.name },
-          status: calc.status,
-          completedAt: calc.status === "COMPLETED" ? new Date("2026-05-15T12:00:00.000Z") : null
+          batchId,
+          name: productName,
+          mode: "alloy",
+          userId: user.id,
+          totalQuantity: finalQty.toFixed(4),
+          baseCost: baseCostFinal.toFixed(4),
+          gstAmount: gstFinal.toFixed(4),
+          finalCost: finalCostFinal.toFixed(4),
+          snapshot,
+          status: item.status,
+          createdAt: createdDate,
+          updatedAt: createdDate,
+          completedAt: item.status === "COMPLETED" || item.status === "APPROVED" ? createdDate : null,
+          approvedById: item.status === "APPROVED" ? approver.id : null,
+          approvedAt: item.status === "APPROVED" ? createdDate : null,
+          approvalReason: item.status === "APPROVED" ? "Verified calculation aligns with JSW standard pricing cards." : null,
+          items: {
+            create: [
+              {
+                metalId: metal.id,
+                gradeId: grade.id,
+                itemName: `${metal.name} (${grade.name})`,
+                quantity: finalQty.toFixed(4),
+                compositionPct: "90.0000",
+                unitPrice: itemUnitPrice.toFixed(4),
+                gradeMultiplier: multiplier.toFixed(4),
+                extraPrice: additionalCost.toFixed(2),
+                baseCost: mainItemBaseCost.toFixed(4),
+                snapshot: { basePrice: metalBaseRate.toFixed(4), multiplier: multiplier.toFixed(4) }
+              },
+              {
+                rawMaterialId: rm1.id,
+                itemName: `${rm1.name} Composition Additive`,
+                quantity: (finalQty * 0.10).toFixed(4),
+                compositionPct: "10.0000",
+                unitPrice: rmUnitPrice.toFixed(4),
+                gradeMultiplier: "1.0000",
+                extraPrice: "0.00",
+                baseCost: rm1BaseCost.toFixed(4),
+                snapshot: { basePrice: rmUnitPrice.toFixed(4) }
+              }
+            ]
+          }
         }
       });
     }
   }
+  console.log(`   ✓ 160 calculations generated with embedded billing items.\n`);
 
-  // ── Notifications ─────────────────────────────────────────────────────────
-  if ((await prisma.notification.count()) === 0) {
-    await prisma.notification.createMany({
-      data: [
-        { userId: admin.id, title: "Price master refreshed", message: "Nickel price list is active for May 2026.", category: "PRICE", priority: "HIGH" },
-        { userId: procurement.id, title: "Calculation completed", message: "BATCH-1023 is ready for report export.", category: "CALCULATION" },
-        { userId: finance.id, title: "Report generated", message: "Monthly Cost Summary for May 2026 is available.", category: "REPORT" },
-        { title: "System maintenance", message: "Scheduled backup at 02:00 IST. No downtime expected.", category: "SYSTEM", priority: "LOW" },
-        { userId: production.id, title: "Price alert", message: "Molybdenum LME price increased by 3.2% this week.", category: "PRICE", priority: "HIGH" }
-      ]
-    });
-  }
-
-  // ── Audit Logs ────────────────────────────────────────────────────────────
-  if ((await prisma.auditLog.count()) === 0) {
-    const calcRow = await prisma.calculation.findUnique({ where: { batchId: "BATCH-1023" } });
-    await prisma.auditLog.createMany({
-      data: [
-        { userId: admin.id, action: "SEED_PRICE", entity: "PriceList", entityId: supplier1.id, details: { message: "Seed price master created" } },
-        { userId: procurement.id, action: "COMPLETE", entity: "Calculation", entityId: calcRow?.id ?? "unknown", details: { batchId: "BATCH-1023" } },
-        { userId: admin.id, action: "CREATE", entity: "User", entityId: employee.id, details: { email: employee.email, role: "EMPLOYEE" } },
-        { userId: finance.id, action: "EXPORT_PDF", entity: "Report", entityId: "monthly-may-26", details: { rows: 5 } }
-      ]
-    });
-  }
-
-  // ── Reports ───────────────────────────────────────────────────────────────
-  await prisma.report.upsert({
-    where: { id: "6fcfca5b-99ad-4109-927a-9b8bdd66e8e6" },
-    update: { name: "Monthly Cost Summary – May 2026", filters: { range: "May 2026" } },
-    create: {
-      id: "6fcfca5b-99ad-4109-927a-9b8bdd66e8e6",
-      name: "Monthly Cost Summary – May 2026",
-      type: "cost-summary",
-      filters: { range: "May 2026" },
-      generatedById: finance.id
-    }
-  });
-
-  // ── GST Slabs ─────────────────────────────────────────────────────────────
-  await Promise.all([
-    prisma.gstSlab.upsert({
-      where: { code: "GST-18" },
-      update: { rate: "18", name: "Standard Rate 18%", active: true },
-      create: { code: "GST-18", name: "Standard Rate 18%", rate: "18", description: "Applicable to most metal products and semi-fabricated goods", active: true }
-    }),
-    prisma.gstSlab.upsert({
-      where: { code: "GST-12" },
-      update: { rate: "12", name: "Concessional Rate 12%", active: true },
-      create: { code: "GST-12", name: "Concessional Rate 12%", rate: "12", description: "Applicable to certain flat-rolled steel products", active: true }
-    }),
-    prisma.gstSlab.upsert({
-      where: { code: "GST-5" },
-      update: { rate: "5", name: "Reduced Rate 5%", active: true },
-      create: { code: "GST-5", name: "Reduced Rate 5%", rate: "5", description: "Applicable to industrial scrap and recycled materials", active: true }
-    }),
-    prisma.gstSlab.upsert({
-      where: { code: "GST-0" },
-      update: { rate: "0", name: "Exempt / Zero Rated", active: true },
-      create: { code: "GST-0", name: "Exempt / Zero Rated", rate: "0", description: "Export supplies and SEZ transactions", active: true }
-    })
-  ]);
-
-  // ── System Settings ───────────────────────────────────────────────────────
-  const settings: Array<{ key: string; value: string; label: string; category: string; description: string }> = [
-    { key: "default_gst_rate", value: "18", label: "Default GST Rate (%)", category: "TAXATION", description: "Applied to calculation final cost unless overridden" },
-    { key: "price_validity_days", value: "30", label: "Price Master Validity (Days)", category: "PRICING", description: "Number of days a price master entry is considered current" },
-    { key: "currency", value: "INR", label: "Base Currency", category: "GENERAL", description: "Default currency for all calculations" },
-    { key: "weight_unit", value: "kg", label: "Default Weight Unit", category: "GENERAL", description: "Base unit for all quantity fields" },
-    { key: "max_alloy_components", value: "10", label: "Max Alloy Components", category: "CALCULATION", description: "Maximum number of components allowed per alloy definition" },
-    { key: "calculation_decimal_places", value: "4", label: "Calculation Decimal Precision", category: "CALCULATION", description: "Number of decimal places maintained in cost calculations" },
-    { key: "session_timeout_minutes", value: "60", label: "Session Timeout (Minutes)", category: "SECURITY", description: "Idle session timeout duration before forced re-authentication" },
-    { key: "max_login_attempts", value: "5", label: "Max Login Attempts", category: "SECURITY", description: "Failed login attempts before account is temporarily locked" }
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 9 — Audit Logs (Exactly 500 audit events)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📝  Generating 500 immutable system audit logs (last 6 months)...");
+  const auditActions = [
+    { action: "LOGIN", entity: "User", msg: "User authenticated successfully via credentials" },
+    { action: "LOGOUT", entity: "User", msg: "Session closed by user" },
+    { action: "CREATE", entity: "Calculation", msg: "Created cost calculation sheet" },
+    { action: "UPDATE", entity: "Calculation", msg: "Draft worksheet updated" },
+    { action: "APPROVE", entity: "Calculation", msg: "Calculation batch approved for production" },
+    { action: "EXPORT_PDF", entity: "Report", msg: "Report exported to PDF document" },
+    { action: "EXPORT_EXCEL", entity: "Report", msg: "Report exported to Excel sheet" },
+    { action: "PRICE_UPDATE", entity: "PriceList", msg: "Metal base price modified in catalog" }
   ];
 
-  await Promise.all(
-    settings.map(({ key, value, label, category, description }) =>
-      prisma.systemSetting.upsert({
-        where: { key },
-        update: { value, label, category, description },
-        create: { key, value, label, category, description }
-      })
-    )
-  );
+  const auditRows: any[] = [];
+  for (let i = 0; i < 500; i++) {
+    const user = pickRandom(userRows);
+    const targetDate = daysAgo(Math.floor(randomRange(1, 180)));
+    const actionSpec = pickRandom(auditActions);
+    const ipAddress = `10.18.${Math.floor(randomRange(10, 99))}.${Math.floor(randomRange(10, 250))}`;
 
-  console.log("✅  MCMS seed complete.", {
-    users: [admin.email, procurement.email, finance.email, production.email, employee.email, user.email],
-    password: "MCMS@2026",
-    metals: 5,
-    grades: 7,
-    rawMaterials: rawMaterials.length,
-    alloys: 4,
-    calculations: calcSeeds.length,
-    gstSlabs: 4,
-    settings: settings.length
+    auditRows.push({
+      userId: user.id,
+      action: actionSpec.action,
+      entity: actionSpec.entity,
+      ipAddress,
+      details: { message: actionSpec.msg, timestamp: targetDate.toISOString() },
+      createdAt: targetDate
+    });
+  }
+
+  // Batch insert in chunks to prevent PostgreSQL query size overflow
+  const chunkSize = 100;
+  for (let i = 0; i < auditRows.length; i += chunkSize) {
+    const chunk = auditRows.slice(i, i + chunkSize);
+    await prisma.auditLog.createMany({ data: chunk });
+  }
+  console.log(`   ✓ 500 audit logs entries created and timestamped.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 10 — Notifications (Exactly 100 notifications)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("🔔  Generating 100 priority notifications...");
+  const notificationTemplates = [
+    { title: "Price Alert - Steel Surge", msg: "Mild Steel base rate increased by 2.5% LME correction.", cat: "PRICE", priority: NotificationPriority.HIGH },
+    { title: "Calculation Submitted", msg: "Calculation worksheet submitted and awaiting approval.", cat: "CALCULATION", priority: NotificationPriority.MEDIUM },
+    { title: "Sheet Approved", msg: "Metal cost calculation sheet approved by finance.", cat: "CALCULATION", priority: NotificationPriority.LOW },
+    { title: "Database Backup Success", msg: "Nightly PostgreSQL dump backup completed successfully.", cat: "SYSTEM", priority: NotificationPriority.LOW },
+    { title: "Export Failed", msg: "Excel compilation timeout due to temporary memory limit.", cat: "SYSTEM", priority: NotificationPriority.HIGH },
+    { title: "Supplier Pricing Update", msg: "Dolvi JSW plant updated raw material scrap coefficients.", cat: "PRICE", priority: NotificationPriority.MEDIUM }
+  ];
+
+  const notificationRows: any[] = [];
+  for (let i = 0; i < 100; i++) {
+    const user = pickRandom(userRows);
+    const targetDate = daysAgo(Math.floor(randomRange(1, 180)));
+    const temp = pickRandom(notificationTemplates);
+
+    notificationRows.push({
+      userId: user.id,
+      title: temp.title,
+      message: temp.msg,
+      category: temp.cat,
+      priority: temp.priority,
+      readAt: Math.random() > 0.6 ? targetDate : null,
+      createdAt: targetDate
+    });
+  }
+
+  for (let i = 0; i < notificationRows.length; i += chunkSize) {
+    const chunk = notificationRows.slice(i, i + chunkSize);
+    await prisma.notification.createMany({ data: chunk });
+  }
+  console.log(`   ✓ 100 notifications generated.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 11 — Reports
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📄  Generating demo reports links...");
+  const reportTypes = [
+    { name: "Monthly Cost Summary - JSW Steel", type: "cost-summary" },
+    { name: "Metallurgical Composition Output", type: "alloy-analysis" },
+    { name: "Metal Production Usage Report", type: "metal-usage" },
+    { name: "Cost Engineer Log Auditing", type: "user-activity" }
+  ];
+
+  const reportRows: any[] = [];
+  for (let i = 0; i < 15; i++) {
+    const user = pickRandom(userRows);
+    const spec = pickRandom(reportTypes);
+    const targetDate = daysAgo(Math.floor(randomRange(1, 180)));
+
+    reportRows.push({
+      name: `${spec.name} - Batch Q${Math.floor(randomRange(1, 3))}`,
+      type: spec.type,
+      filters: { range: "Custom 6 Months", generateType: spec.type },
+      generatedById: user.id,
+      createdAt: targetDate
+    });
+  }
+
+  for (const report of reportRows) {
+    await prisma.report.create({ data: report });
+  }
+  console.log(`   ✓ ${reportRows.length} report templates initialized.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 12 — GST Slabs & Settings
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📊  Initializing GST slabs and settings...");
+  await prisma.gstSlab.createMany({
+    data: [
+      { name: "GST Steel Standard", code: "GST-18", rate: "0.1800", description: "Standard GST for steel products" },
+      { name: "GST Specialty Custom", code: "GST-28", rate: "0.2800", description: "Luxury or specialty alloys slab" },
+      { name: "GST Nil Rate", code: "GST-0", rate: "0.0000", description: "Exempted export items" },
+      { name: "GST Concessional Rate", code: "GST-12", rate: "0.1200", description: "Concessional GST for metals" },
+      { name: "GST Concessional Scrap", code: "GST-5", rate: "0.0500", description: "Concessional GST for scrap materials" }
+    ]
   });
+
+  await prisma.systemSetting.createMany({
+    data: [
+      { key: "CORS_ORIGIN", value: "http://localhost:5173", label: "CORS Allowed Origin" },
+      { key: "TOKEN_EXPIRY_ACCESS", value: "15m", label: "Access Token Lifetime" },
+      { key: "TOKEN_EXPIRY_REFRESH", value: "7d", label: "Refresh Token Lifetime" },
+      { key: "APP_NAME", value: "JSW Metal Cost Management System", label: "Application Name" },
+      { key: "default_gst_rate", value: "18", label: "Default GST Rate (%)", category: "TAXATION", description: "Applied to calculation final cost unless overridden" },
+      { key: "price_validity_days", value: "30", label: "Price Master Validity (Days)", category: "PRICING", description: "Number of days a price master entry is considered current" },
+      { key: "currency", value: "INR", label: "Base Currency", category: "GENERAL", description: "Default currency for all calculations" },
+      { key: "weight_unit", value: "kg", label: "Default Weight Unit", category: "GENERAL", description: "Base unit for all quantity fields" },
+      { key: "max_alloy_components", value: "10", label: "Max Alloy Components", category: "CALCULATION", description: "Maximum number of components allowed per alloy definition" },
+      { key: "calculation_decimal_places", value: "4", label: "Calculation Decimal Precision", category: "CALCULATION", description: "Number of decimal places maintained in cost calculations" },
+      { key: "session_timeout_minutes", value: "60", label: "Session Timeout (Minutes)", category: "SECURITY", description: "Idle session timeout duration before forced re-authentication" },
+      { key: "max_login_attempts", value: "5", label: "Max Login Attempts", category: "SECURITY", description: "Failed login attempts before account is temporarily locked" }
+    ]
+  });
+  console.log("   ✓ GST and System parameters configured.\n");
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 13 — Saved Comparison Records (10 templates)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📊  Generating 10 saved comparison records...");
+  const comparisonTemplates = [
+    { name: "Hot Rolled Sheet vs Coil Specs" },
+    { name: "Structural Angles vs Channels" },
+    { name: "TMT Rebars Fe500D vs Fe600" },
+    { name: "Stainless Steel 304 vs 316 Marine" },
+    { name: "Duplex SS vs SS316" },
+    { name: "Electrical Silicon Steel Comparison" },
+    { name: "Titanium Alloys vs Nickel Alloys" },
+    { name: "Cold Rolled Sheets Drawing Grades" },
+    { name: "Weathering Steel Corten Comparison" },
+    { name: "Tool Steels Hardness Analysis" }
+  ];
+
+  for (let i = 0; i < comparisonTemplates.length; i++) {
+    const template = comparisonTemplates[i];
+    // Pick 3 random grades from gradeRows
+    const selectedGrades = [
+      pickRandom(gradeRows).id,
+      pickRandom(gradeRows).id,
+      pickRandom(gradeRows).id
+    ];
+
+    await prisma.comparisonRecord.create({
+      data: {
+        name: template.name,
+        gradeIds: selectedGrades,
+        userId: pickRandom(userRows).id
+      }
+    });
+  }
+  console.log("   ✓ 10 saved comparison records seeded.\n");
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STEP 14 — JSW Product Catalog (28 items)
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("📦  Generating JSW Product Catalog...");
+  const catalogData = [
+    { category: "MS Hot Rolled", steelType: "HR Coil E250A", grade: "E250A", subGrade: "Standard", basePrice: 63.75, image: "coil" },
+    { category: "MS Hot Rolled", steelType: "HR Coil E250A", grade: "E250A", subGrade: "L", basePrice: 64.25, image: "coil" },
+    { category: "MS Hot Rolled", steelType: "HR Coil E250A", grade: "E275", subGrade: "Standard", basePrice: 64.75, image: "coil" },
+    { category: "MS Hot Rolled", steelType: "HR Coil E250A", grade: "E275", subGrade: "L", basePrice: 65.25, image: "coil" },
+    { category: "MS Hot Rolled", steelType: "HR Sheet", grade: "E350", subGrade: "Standard", basePrice: 65.20, image: "sheet" },
+    { category: "MS Hot Rolled", steelType: "HR Sheet", grade: "E410", subGrade: "Standard", basePrice: 66.80, image: "sheet" },
+    { category: "MS Hot Rolled", steelType: "HR Plate", grade: "E250", subGrade: "Standard", basePrice: 67.50, image: "plate" },
+    { category: "MS Hot Rolled", steelType: "HR Plate", grade: "E350", subGrade: "Standard", basePrice: 68.90, image: "plate" },
+    
+    { category: "MS Cold Rolled", steelType: "CR Coil", grade: "D", subGrade: "Standard", basePrice: 68.40, image: "coil" },
+    { category: "MS Cold Rolled", steelType: "CR Coil", grade: "DD", subGrade: "Standard", basePrice: 69.80, image: "coil" },
+    { category: "MS Cold Rolled", steelType: "CR Coil", grade: "EDD", subGrade: "Standard", basePrice: 71.50, image: "coil" },
+    { category: "MS Cold Rolled", steelType: "CR Sheet", grade: "D", subGrade: "Standard", basePrice: 70.10, image: "sheet" },
+    { category: "MS Cold Rolled", steelType: "CR Sheet", grade: "DD", subGrade: "Standard", basePrice: 71.30, image: "sheet" },
+    
+    { category: "TMT", steelType: "TMT Fe500D", grade: "Fe500D", subGrade: "Standard", basePrice: 58.90, image: "bar" },
+    { category: "TMT", steelType: "TMT Fe550D", grade: "Fe550D", subGrade: "Standard", basePrice: 60.30, image: "bar" },
+    { category: "TMT", steelType: "TMT Fe600", grade: "Fe600", subGrade: "Standard", basePrice: 62.10, image: "bar" },
+    
+    { category: "Coated Steel", steelType: "Galvanized Coil", grade: "GP", subGrade: "Standard", basePrice: 72.80, image: "coil" },
+    { category: "Coated Steel", steelType: "Galvanized Coil", grade: "GC", subGrade: "Standard", basePrice: 73.50, image: "coil" },
+    { category: "Coated Steel", steelType: "Galvalume Sheet", grade: "GL", subGrade: "Standard", basePrice: 74.50, image: "sheet" },
+    
+    { category: "Wire Rods", steelType: "MS Wire Rod", grade: "SAE1006", subGrade: "Standard", basePrice: 61.20, image: "rod" },
+    { category: "Wire Rods", steelType: "MS Wire Rod", grade: "SAE1008", subGrade: "Standard", basePrice: 62.40, image: "rod" },
+    { category: "Wire Rods", steelType: "Carbon Steel Wire Rod", grade: "EN8D", subGrade: "Standard", basePrice: 64.60, image: "rod" },
+    { category: "Wire Rods", steelType: "Carbon Steel Wire Rod", grade: "EN9", subGrade: "Standard", basePrice: 66.10, image: "rod" },
+    
+    { category: "Structural Steel", steelType: "MS Angle", grade: "E250", subGrade: "Standard", basePrice: 66.80, image: "angle" },
+    { category: "Structural Steel", steelType: "MS Channel", grade: "E250", subGrade: "Standard", basePrice: 67.90, image: "channel" },
+    { category: "Structural Steel", steelType: "H-Beam", grade: "E250", subGrade: "Standard", basePrice: 71.40, image: "beam" },
+    { category: "Structural Steel", steelType: "H-Beam", grade: "E350", subGrade: "Standard", basePrice: 73.20, image: "beam" }
+  ];
+
+  await prisma.jswProductCatalog.createMany({
+    data: catalogData.map((item) => ({
+      category: item.category,
+      steelType: item.steelType,
+      grade: item.grade,
+      subGrade: item.subGrade,
+      image: item.image,
+      basePrice: item.basePrice.toFixed(4)
+    }))
+  });
+  console.log(`   ✓ ${catalogData.length} product catalog items seeded.\n`);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SUMMARY
+  // ══════════════════════════════════════════════════════════════════════════
+  console.log("═".repeat(70));
+  console.log("✅  JSW MCMS Demo Data Seeding Completed Successfully!");
+  console.log(`   Total Users        : ${userRows.length}`);
+  console.log(`   Total Metals       : ${metalRows.length}`);
+  console.log(`   Total Grades       : ${gradeRows.length}`);
+  console.log(`   Total Calculations : 160 (100 COMPLETED, 40 DRAFT, 20 APPROVED)`);
+  console.log(`   Price History      : 200 records`);
+  console.log(`   Audit Logs         : 500 logs`);
+  console.log(`   Notifications      : 100 alerts`);
+  console.log(`   Reports            : ${reportRows.length} records`);
+  console.log(`   Saved Comparisons  : ${comparisonTemplates.length} records`);
+  console.log(`   Catalog Products   : ${catalogData.length} products`);
+  console.log("═".repeat(70));
+  console.log("\n🔐  Use the presentation credentials to login:");
+  console.log("   SUPER ADMIN: superadmin@jsw.in  / MCMS@2026");
+  console.log("   ADMIN    : admin@jsw-mcms.local  / MCMS@2026");
+  console.log("   EMPLOYEE : employee@jsw-mcms.local  / MCMS@2026");
+  console.log("   USER     : user@jsw-mcms.local  / MCMS@2026\n");
 }
 
 main()
-  .finally(async () => prisma.$disconnect())
-  .catch(async (error) => {
-    console.error(error);
-    process.exitCode = 1;
+  .catch((e) => {
+    console.error("❌  Demo Seed failed: ", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
   });

@@ -8,4 +8,4 @@ import * as ctrl from "../controllers/audit.controller.js";
 
 export const auditRoutes = Router();
 
-auditRoutes.get("/", allowRoles("ADMIN", "EMPLOYEE"), ctrl.listLogs);
+auditRoutes.get("/", allowRoles("COSTING_DEPARTMENT"), ctrl.listLogs);

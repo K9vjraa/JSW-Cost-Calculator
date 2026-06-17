@@ -9,6 +9,8 @@ datasource db {
 
 enum CalculationStatus {
   DRAFT
+  SUBMITTED
+  APPROVED
   COMPLETED
   CANCELLED
 }
@@ -46,10 +48,14 @@ model User {
   notifications      Notification[]
   reports            Report[]
   priceHistoryEvents PriceHistory[]
+  comparisonRecords  ComparisonRecord[]
+  approvedCalculations Calculation[] @relation("ApprovedCalculations")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   @@index([roleId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model RefreshToken {
@@ -83,6 +89,7 @@ model Metal {
 
   @@index([name])
   @@index([category, status])
+  @@index([createdAt])
 }
 
 model Grade {
@@ -100,11 +107,16 @@ model Grade {
   status                String @default("ACTIVE")
   alloyComponents       AlloyComponent[]
   calculationItems      CalculationItem[]
+  mechanicalProperty    MechanicalProperty?
+  chemicalProperty      ChemicalProperty?
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
   @@unique([metalId, name, subGrade])
   @@index([metalId, status])
+  @@index([name])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model RawMaterial {
@@ -187,6 +199,7 @@ model PriceList {
   location      String @default("India")
   effectiveFrom DateTime
   active        Boolean @default(true)
+  status        String @default("APPROVED")
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -233,10 +246,17 @@ model Calculation {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   completedAt    DateTime?
+  oldCost        Decimal? @db.Decimal(18, 4)
+  approvedById   String?
+  approvedBy     User?    @relation("ApprovedCalculations", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+  approvalReason String?
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([alloyId])
+  @@index([createdAt])
+  @@index([completedAt])
 }
 
 model CalculationItem {
@@ -276,6 +296,7 @@ model AuditLog {
 
   @@index([entity, createdAt])
   @@index([userId, createdAt])
+  @@index([createdAt])
 }
 
 model Notification {
@@ -291,6 +312,7 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
   @@index([category, createdAt])
+  @@index([createdAt])
 }
 
 model Report {
@@ -331,4 +353,67 @@ model GstSlab {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model MechanicalProperty {
+  id                 String   @id @default(uuid())
+  gradeId            String   @unique
+  grade              Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  uts                String
+  yieldStrength      String
+  elongation         String
+  hardness           String
+  thicknessTolerance String
+  widthTolerance     String
+  flatnessTolerance  String
+  minBendRadius      String
+  bendRating         String
+  springback         String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ChemicalProperty {
+  id          String   @id @default(uuid())
+  gradeId     String   @unique
+  grade       Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  carbon      String?
+  manganese   String?
+  silicon     String?
+  chromium    String?
+  nickel      String?
+  molybdenum  String?
+  phosphorus  String?
+  sulfur      String?
+  aluminum    String?
+  magnesium   String?
+  iron        String?
+  copper      String?
+  zinc        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ComparisonRecord {
+  id        String   @id @default(uuid())
+  name      String
+  gradeIds  Json
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model JswProductCatalog {
+  id        String   @id @default(uuid())
+  category  String
+  steelType String
+  grade     String
+  subGrade  String
+  image     String
+  basePrice Decimal  @db.Decimal(10, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, steelType, grade, subGrade])
 }

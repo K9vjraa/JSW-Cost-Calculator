@@ -29,7 +29,6 @@ import {
   TableRow, 
   TableHead, 
   TableCell, 
-  Badge, 
   Button, 
   AlertCard, 
   ChartContainer,
@@ -48,11 +47,14 @@ import type { Calculation } from "@/types";
    DENSITY STATUS BADGE FORMATTER
    ---------------------------------------------------- */
 function StatusBadge({ value }: { value: string }) {
-  const variant = value === "COMPLETED" ? "success" : "warning";
   return (
-    <Badge variant={variant}>
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold border ${
+      value === "COMPLETED" 
+        ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+        : "bg-amber-50 text-amber-700 border-amber-200"
+    }`}>
       {value}
-    </Badge>
+    </span>
   );
 }
 
@@ -62,15 +64,15 @@ function StatusBadge({ value }: { value: string }) {
 function DashboardSkeleton() {
   return (
     <div className="flex flex-col gap-6 w-full text-left">
-      <div className="h-20 bg-white border border-[#d6dfeb] rounded-2xl skeleton" />
+      <div className="h-20 bg-white border border-[#e5e7eb] rounded" />
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {Array.from({ length: 5 }, (_, idx) => (
-          <div key={idx} className="h-28 bg-white border border-[#d6dfeb] rounded-2xl skeleton" />
+          <div key={idx} className="h-28 bg-white border border-[#e5e7eb] rounded" />
         ))}
       </div>
       <div className="grid gap-6 grid-cols-1 xl:grid-cols-[1.6fr_0.8fr]">
-        <div className="h-[340px] bg-white border border-[#d6dfeb] rounded-2xl skeleton" />
-        <div className="h-[340px] bg-white border border-[#d6dfeb] rounded-2xl skeleton" />
+        <div className="h-[340px] bg-white border border-[#e5e7eb] rounded" />
+        <div className="h-[340px] bg-white border border-[#e5e7eb] rounded" />
       </div>
     </div>
   );
@@ -81,7 +83,7 @@ function DashboardSkeleton() {
    ---------------------------------------------------- */
 export function DashboardPage() {
   const { actor } = useAuth();
-  return actor?.role === "ADMIN" ? <AdminDashboard /> : <UserDashboard />;
+  return actor?.role === "COSTING_DEPARTMENT" ? <AdminDashboard /> : <UserDashboard />;
 }
 
 /* ----------------------------------------------------
@@ -103,21 +105,20 @@ function AdminDashboard() {
       className="flex flex-col gap-6 w-full text-left"
     >
       {/* Dynamic JSW Executive Header */}
-      <header className="flex flex-wrap items-end justify-between gap-4 bg-white p-5 rounded-2xl border border-[#d6dfeb] shadow-xs relative overflow-hidden">
-        <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-[#0057b8]" />
-        
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wider text-[#0057b8]">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             JSW Production Control Hub
           </p>
-          <h2 className="text-xl font-black text-[#10233d] uppercase tracking-wide mt-0.5">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">
             System Control Dashboard
           </h2>
         </div>
 
-        <Badge variant="info" icon={<ShieldCheck className="size-3.5" />}>
-          Admin Executive Level
-        </Badge>
+        <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold">
+          <ShieldCheck className="size-3.5 text-slate-600" />
+          <span>Costing Department Level</span>
+        </div>
       </header>
 
       {/* KPI Cards Grid */}
@@ -125,33 +126,33 @@ function AdminDashboard() {
         <KPICard
           title="Calculations Saved"
           value={data.kpis.calculations.toLocaleString("en-IN")}
-          icon={<Calculator className="size-4.5 text-[#0057b8]" />}
+          icon={<Calculator className="size-4.5" />}
           trend={{ value: "18.6% up", isPositive: true, label: "this month" }}
         />
         <KPICard
           title="Configured Alloys"
           value={String(data.kpis.alloys)}
-          icon={<Layers3 className="size-4.5 text-[#087443]" />}
+          icon={<Layers3 className="size-4.5" />}
           trend={{ value: "12% up", isPositive: true, label: "catalog" }}
           isLocked
         />
         <KPICard
           title="Raw Ingredients"
           value={String(data.kpis.rawMaterials)}
-          icon={<PackagePlus className="size-4.5 text-[#f2994a]" />}
+          icon={<PackagePlus className="size-4.5" />}
           trend={{ value: "Prices locked", isPositive: true, label: "master" }}
           isLocked
         />
         <KPICard
           title="Est. Billing Volume"
           value={inr(data.kpis.estimatedValue)}
-          icon={<IndianRupee className="size-4.5 text-[#d63031]" />}
+          icon={<IndianRupee className="size-4.5" />}
           trend={{ value: "4.2% up", isPositive: true, label: "demand" }}
         />
         <KPICard
           title="Controlled Access Users"
           value={String(data.kpis.activeUsers)}
-          icon={<Users className="size-4.5 text-[#0057b8]" />}
+          icon={<Users className="size-4.5" />}
           trend={{ value: "Active", isPositive: true, label: "online" }}
         />
       </div>
@@ -177,28 +178,28 @@ function AdminDashboard() {
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-center gap-3">
             <Button 
-              className="w-full h-10 shadow-sm"
+              className="w-full h-9"
               leftIcon={<Calculator className="size-4" />}
             >
               Run Calculation Workspace
             </Button>
             <Button 
               variant="secondary" 
-              className="w-full h-10"
+              className="w-full h-9 bg-slate-100 hover:bg-slate-200 text-slate-700"
               leftIcon={<Layers3 className="size-4" />}
             >
               Add Alloy Recipe
             </Button>
             <Button 
               variant="outline" 
-              className="w-full h-10 border-[#d6dfeb]"
+              className="w-full h-9 border-slate-200 hover:bg-slate-50 text-slate-700"
               leftIcon={<PackagePlus className="size-4" />}
             >
               Add Metal Grade
             </Button>
             <Button 
               variant="outline" 
-              className="w-full h-10 border-[#d6dfeb]"
+              className="w-full h-9 border-slate-200 hover:bg-slate-50 text-slate-700"
               leftIcon={<Zap className="size-4" />}
             >
               Master Price Update
@@ -236,23 +237,23 @@ function AdminDashboard() {
             <CardTitle>Security & Calculation Logs</CardTitle>
             <CardDescription>Recent master audit actions logged</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin">
+          <CardContent className="space-y-2.5 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin">
             {data.activity.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-start gap-3 rounded-xl border border-[#d6dfeb] p-3 text-xs bg-slate-50/50 hover:bg-white transition-colors duration-200 shadow-sm"
+                className="flex items-start gap-3 border border-slate-200 p-2.5 rounded text-xs bg-white hover:bg-slate-50 transition-colors duration-150"
               >
-                <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[#edf5ff] text-[#0057b8]">
-                  <Activity className="size-4" />
+                <div className="flex size-6.5 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-600">
+                  <Activity className="size-3.5" />
                 </div>
                 <div className="flex-1 space-y-0.5 text-left">
-                  <strong className="block text-slate-800 text-xs font-bold leading-tight">
+                  <strong className="block text-slate-900 text-xs font-semibold leading-tight">
                     {entry.entity} updated
                   </strong>
-                  <p className="text-[10px] text-[#56657a] font-semibold">
+                  <p className="text-[10px] text-slate-500 font-medium">
                     {entry.action.replace("_", " ")} by {entry.user?.name ?? "System Operator"}
                   </p>
-                  <span className="inline-block text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded mt-1.5">
+                  <span className="inline-block text-[9px] font-semibold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded mt-1">
                     {shortDate(entry.createdAt)}
                   </span>
                 </div>
@@ -281,12 +282,12 @@ function AdminDashboard() {
               {Object.entries(data.systemSummary).map(([name, value]) => (
                 <div 
                   key={name} 
-                  className="rounded-xl border border-[#d6dfeb] bg-[#fafcff] p-3 text-xs flex flex-col gap-0.5 text-left shadow-sm"
+                  className="rounded border border-slate-200 bg-slate-50 p-3 text-xs flex flex-col gap-0.5 text-left"
                 >
-                  <span className="font-bold uppercase tracking-wider text-slate-400 text-[10px]">
+                  <span className="font-semibold uppercase tracking-wider text-slate-500 text-[9px]">
                     {name.replace(/([A-Z])/g, " $1")}
                   </span>
-                  <strong className="text-lg font-black text-slate-700">{value}</strong>
+                  <strong className="text-base font-semibold text-slate-950">{value}</strong>
                 </div>
               ))}
             </div>
@@ -299,7 +300,7 @@ function AdminDashboard() {
                 title={notice.title}
                 description={notice.message}
                 action={
-                  <Button size="sm" variant="ghost" className="h-7 text-[10px] font-extrabold gap-0.5 px-2">
+                  <Button size="sm" variant="ghost" className="h-7 text-[10px] font-semibold gap-0.5 px-2">
                     <span>Manage</span>
                     <ArrowRight className="size-3" />
                   </Button>
@@ -321,10 +322,10 @@ function AdminDashboard() {
    ---------------------------------------------------- */
 function CostingWorkflowStepper() {
   const steps = [
-    { title: "Workspace Simulation", desc: "Build alloy recipe & materials weight", status: "completed" },
+    { title: "Workspace Simulation", desc: "Build alloy recipe & weights", status: "completed" },
     { title: "Master Price Sync", desc: "Sync locked pricing indexes", status: "active" },
-    { title: "Surcharge & GST Validation", desc: "Calculate margins & base multipliers", status: "pending" },
-    { title: "Snapshot Commit", desc: "Commit batch run to snapshot ledger", status: "locked" }
+    { title: "Surcharge & GST Validation", desc: "Calculate margins & multipliers", status: "pending" },
+    { title: "Snapshot Commit", desc: "Commit batch run to ledger", status: "locked" }
   ];
 
   return (
@@ -339,19 +340,19 @@ function CostingWorkflowStepper() {
             {/* Stepper Connector Line */}
             {idx < steps.length - 1 && (
               <div 
-                className={`absolute left-3.5 top-7 bottom-0 w-0.5 z-0 ${
-                  step.status === "completed" ? "bg-[#087443]" : "bg-slate-200"
+                className={`absolute left-3 top-7 bottom-0 w-0.5 z-0 ${
+                  step.status === "completed" ? "bg-emerald-500" : "bg-slate-200"
                 }`} 
               />
             )}
             
             {/* Circular Step Badge */}
             <div 
-              className={`z-10 flex size-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-black ${
+              className={`z-10 flex size-6 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${
                 step.status === "completed" 
-                  ? "bg-[#e8fbf0] border-[#bde4cf] text-[#087443]" 
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
                   : step.status === "active"
-                  ? "bg-[#edf5ff] border-[#bfd6f5] text-[#0057b8] animate-pulse"
+                  ? "bg-slate-100 border-[#002652] text-[#002652]"
                   : "bg-slate-50 border-slate-200 text-slate-400"
               }`}
             >
@@ -361,13 +362,13 @@ function CostingWorkflowStepper() {
             {/* Stepper details */}
             <div className="flex flex-col gap-0.5">
               <strong 
-                className={`text-xs font-bold leading-none ${
-                  step.status === "active" ? "text-[#0057b8]" : "text-slate-800"
+                className={`text-xs font-semibold leading-none ${
+                  step.status === "active" ? "text-[#002652]" : "text-slate-800"
                 }`}
               >
                 {step.title}
               </strong>
-              <span className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+              <span className="text-[10px] text-slate-500 leading-relaxed">
                 {step.desc}
               </span>
             </div>
@@ -397,21 +398,20 @@ function UserDashboard() {
       className="flex flex-col gap-6 w-full text-left"
     >
       {/* JSW Operator Header Banner */}
-      <header className="flex flex-wrap items-end justify-between gap-4 bg-white p-5 rounded-2xl border border-[#d6dfeb] shadow-xs relative overflow-hidden">
-        <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-[#0057b8]" />
-        
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-5">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wider text-[#0057b8]">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             JSW Operator Cost Workspace
           </p>
-          <h2 className="text-xl font-black text-[#10233d] uppercase tracking-wide mt-0.5">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">
             Operational Cost Dashboard
           </h2>
         </div>
 
-        <Badge variant="info" icon={<Sparkles className="size-3.5" />}>
-          Procurement Access
-        </Badge>
+        <div className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs px-2.5 py-1 rounded font-semibold">
+          <Sparkles className="size-3.5 text-slate-600" />
+          <span>PDQC Access</span>
+        </div>
       </header>
 
       {/* KPI Cards Grid */}
@@ -419,25 +419,25 @@ function UserDashboard() {
         <KPICard
           title="Your Calculations"
           value={String(data.kpis.calculations)}
-          icon={<Calculator className="size-4.5 text-[#0057b8]" />}
+          icon={<Calculator className="size-4.5" />}
           trend={{ value: "12% up", isPositive: true, label: "vs last month" }}
         />
         <KPICard
           title="Saved Alloy Recipes"
           value={String(data.kpis.savedAlloys)}
-          icon={<Layers3 className="size-4.5 text-[#087443]" />}
+          icon={<Layers3 className="size-4.5" />}
           trend={{ value: "8% increase", isPositive: true, label: "catalog" }}
         />
         <KPICard
           title="Estimated Cost Run"
           value={inr(data.kpis.estimatedValue)}
-          icon={<IndianRupee className="size-4.5 text-[#d63031]" />}
+          icon={<IndianRupee className="size-4.5" />}
           trend={{ value: "Pricing locked", isPositive: true, label: "master" }}
         />
         <KPICard
           title="Recent Calculations"
           value={String(data.kpis.recentActivity)}
-          icon={<TrendingUp className="size-4.5 text-[#f2994a]" />}
+          icon={<TrendingUp className="size-4.5" />}
           trend={{ value: "Live active", isPositive: true, label: "indices" }}
         />
       </div>
@@ -464,28 +464,28 @@ function UserDashboard() {
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-center gap-3">
               <Button 
-                className="w-full h-10 shadow-sm"
+                className="w-full h-9"
                 leftIcon={<Calculator className="size-4" />}
               >
                 New Cost Simulation
               </Button>
               <Button 
                 variant="secondary" 
-                className="w-full h-10 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                className="w-full h-9 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 leftIcon={<Layers3 className="size-4" />}
               >
                 Open Alloy Catalog
               </Button>
               <Button 
                 variant="outline" 
-                className="w-full h-10 border-[#d6dfeb] text-slate-600 hover:bg-slate-50"
+                className="w-full h-9 border-slate-200 text-slate-600 hover:bg-slate-50"
                 leftIcon={<FileSpreadsheet className="size-4" />}
               >
                 Export Cost Sheet
               </Button>
               <Button 
                 variant="outline" 
-                className="w-full h-10 border-[#d6dfeb] text-slate-600 hover:bg-slate-50"
+                className="w-full h-9 border-slate-200 text-slate-600 hover:bg-slate-50"
                 leftIcon={<FileText className="size-4" />}
               >
                 Download Audit Logs
@@ -518,20 +518,20 @@ function UserDashboard() {
             {data.saved.map((alloy) => (
               <div
                 key={alloy.id}
-                className="rounded-xl border border-[#d6dfeb] p-3.5 bg-slate-50/50 hover:bg-white transition-all duration-200 flex flex-col justify-between shadow-sm relative group"
+                className="rounded border border-slate-200 p-3 bg-white hover:border-slate-400 transition-colors flex flex-col justify-between relative group"
               >
                 <div className="text-left">
-                  <strong className="block text-slate-800 text-xs font-bold leading-tight">
+                  <strong className="block text-slate-900 text-xs font-semibold leading-tight">
                     {alloy.name}
                   </strong>
-                  <span className="inline-block text-[8px] font-extrabold text-slate-400 bg-slate-100 px-2 py-0.5 rounded mt-1.5 uppercase tracking-wider">
+                  <span className="inline-block text-[8px] font-bold text-slate-500 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded mt-1 uppercase tracking-wider">
                     {alloy.type}
                   </span>
                 </div>
                 <Button 
                   size="sm" 
                   variant="outline" 
-                  className="h-7 w-full text-[10px] font-bold rounded-lg border-[#d6dfeb] text-[#56657a] hover:bg-white mt-4"
+                  className="h-7 w-full text-[10px] font-semibold rounded border-slate-200 text-slate-600 hover:bg-slate-50 mt-3"
                 >
                   Load in Workspace
                 </Button>
@@ -550,12 +550,12 @@ function UserDashboard() {
             {data.notices.map((notice) => (
               <div 
                 key={notice.id} 
-                className="rounded-xl border border-[#d6dfeb] p-3 text-xs bg-slate-50/50 hover:bg-white transition-colors duration-200 shadow-sm flex flex-col gap-1 text-left"
+                className="rounded border border-slate-200 p-2.5 text-xs bg-white hover:bg-slate-50 transition-colors flex flex-col gap-1 text-left"
               >
-                <strong className="font-bold text-slate-800 text-[11px] leading-tight">
+                <strong className="font-semibold text-slate-900 text-[11px] leading-tight">
                   {notice.title}
                 </strong>
-                <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                <p className="text-[10px] text-slate-500 leading-relaxed">
                   {notice.message}
                 </p>
               </div>
@@ -581,30 +581,30 @@ function RecentCalculationsTable({ rows }: { rows: Calculation[] }) {
         <div className="table-responsive">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Batch Code</TableHead>
-                <TableHead>Alloy Name</TableHead>
-                <TableHead className="text-right">Weight (kg)</TableHead>
-                <TableHead className="text-right">Est. Price</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Calculation Date</TableHead>
+              <TableRow className="bg-slate-50">
+                <TableHead className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Batch Code</TableHead>
+                <TableHead className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Alloy Name</TableHead>
+                <TableHead className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Weight (kg)</TableHead>
+                <TableHead className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Est. Price</TableHead>
+                <TableHead className="text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</TableHead>
+                <TableHead className="text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Calculation Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="font-extrabold text-slate-800">{row.batchId}</TableCell>
-                  <TableCell className="font-bold text-slate-700">{row.alloy?.name ?? row.name}</TableCell>
-                  <TableCell className="text-right font-semibold text-slate-500">
+                <TableRow key={row.id} className="hover:bg-slate-50/50">
+                  <TableCell className="font-mono text-xs text-slate-900 font-semibold">{row.batchId}</TableCell>
+                  <TableCell className="font-semibold text-slate-800">{row.alloy?.name ?? row.name}</TableCell>
+                  <TableCell className="text-right font-mono text-xs text-slate-600">
                     {Number(row.totalQuantity).toLocaleString("en-IN")} kg
                   </TableCell>
-                  <TableCell className="text-right font-black text-[#0057b8]">
+                  <TableCell className="text-right font-mono text-xs text-slate-900 font-semibold">
                     {inr(row.finalCost)}
                   </TableCell>
                   <TableCell className="text-center">
                     <StatusBadge value={row.status} />
                   </TableCell>
-                  <TableCell className="text-right font-semibold text-slate-400">
+                  <TableCell className="text-right font-mono text-xs text-slate-500">
                     {shortDate(row.updatedAt)}
                   </TableCell>
                 </TableRow>

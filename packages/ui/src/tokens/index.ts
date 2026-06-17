@@ -8,31 +8,31 @@
 
 export const COLORS = {
   jsw: {
-    corporate: "#032f67", // JSW deep corporate navy
-    blue: "#0057b8",      // JSW primary bright blue
-    accent: "#0b63c8",    // Accent active blue
-    lightBg: "#e8f0fb",   // Secondary highlighted background
-    textDark: "#063d83",  // Contrast text dark blue
+    corporate: "#002652", // JSW primary dark blue
+    blue: "#003b7a",      // JSW primary bright blue
+    accent: "#d97706",    // Accent furnace/warning orange
+    lightBg: "#f9f9ff",   // Secondary highlighted background
+    textDark: "#141b2b",  // Contrast text dark blue
   },
   neutral: {
-    background: "#f5f8fc", // Sleek gray light background
-    foreground: "#10233d", // Deep slate for high-density readable text
+    background: "#f9f9ff", // Sleek gray light background
+    foreground: "#141b2b", // Deep slate for high-density readable text
     card: "#ffffff",       // Clean white container bg
-    muted: "#eef3f8",      // Subdued background tint
-    mutedText: "#56657a",  // Mid-gray body text
-    border: "#d6dfeb",     // Soft gray border line
+    muted: "#e9edff",      // Subdued background tint (Surface Container)
+    mutedText: "#434750",  // Mid-gray body text (On Surface Variant)
+    border: "#c3c6d2",     // Soft gray border line (Outline Variant)
   },
   status: {
     success: "#087443",    // JSW production certified green
     successBg: "#e8fbf0",  // Success background glow
     successBorder: "#bde4cf",
-    danger: "#d63031",     // JSW cost surcharge/alert red
-    dangerBg: "#fdf0f0",   // Alert background glow
-    dangerBorder: "#f9cccc",
+    danger: "#ba1a1a",     // JSW cost surcharge/alert red
+    dangerBg: "#ffdad6",   // Alert background glow
+    dangerBorder: "#93000a",
     warning: "#f2994a",    // High-heat furnace orange warning
     warningBg: "#fef5ec",  // Warning background glow
     warningBorder: "#fdd9b5",
-    info: "#0057b8",       // Information blue
+    info: "#003b7a",       // Information blue
     infoBg: "#edf5ff",
     infoBorder: "#bfd6f5"
   }
@@ -89,9 +89,9 @@ export const TYPOGRAPHY = {
 
 export const ROUNDNESS = {
   none: "0px",
-  sm: "4px",
-  md: "8px",   // Primary card & controls rounding
-  lg: "12px",  // High-fidelity card rounding
-  xl: "16px",  // Large modal / header roundness
+  sm: "2px",
+  md: "4px",   // Primary card & controls rounding (soft 4px)
+  lg: "8px",   // High-fidelity card rounding (8px)
+  xl: "12px",  // Large modal / header roundness
   full: "9999px"
 } as const;

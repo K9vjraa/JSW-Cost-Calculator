@@ -1,0 +1,16 @@
+id,metalId,rawMaterialId,supplierId,pricePerUnit,currency,unit,source,location,effectiveFrom,active
+price-1,metal-ss,,SUP-JSW-01,62.5000,INR,kg,JSW-MASTER-SS,India,2026-05-01T00:00:00.000Z,true
+price-2,metal-fe,,SUP-JSW-01,80.0000,INR,kg,JSW-MASTER-FE,India,2026-05-01T00:00:00.000Z,true
+price-3,metal-as,,SUP-JSW-01,72.0000,INR,kg,JSW-MASTER-AS,India,2026-05-01T00:00:00.000Z,true
+price-4,metal-cs,,SUP-JSW-01,48.0000,INR,kg,JSW-MASTER-CS,India,2026-05-01T00:00:00.000Z,true
+price-5,metal-cu,,SUP-ESSAR-02,720.0000,INR,kg,LME-SPOT-CU,India,2026-05-01T00:00:00.000Z,true
+price-6,metal-al,,SUP-JSW-01,185.0000,INR,kg,JSW-MASTER-AL,India,2026-05-01T00:00:00.000Z,true
+price-7,metal-zn,,SUP-JSW-01,240.0000,INR,kg,JSW-MASTER-ZN,India,2026-05-01T00:00:00.000Z,true
+price-8,,rm-fe,SUP-JSW-01,80.0000,INR,kg,JSW-RM-FE,India,2026-05-01T00:00:00.000Z,true
+price-9,,rm-ni,SUP-ESSAR-02,850.0000,INR,kg,LME-NI,India,2026-05-01T00:00:00.000Z,true
+price-10,,rm-cr,SUP-ESSAR-02,650.0000,INR,kg,LME-CR,India,2026-05-01T00:00:00.000Z,true
+price-11,,rm-scr,SUP-JSW-01,35.0000,INR,kg,JSW-SCRAP,India,2026-05-01T00:00:00.000Z,true
+price-12,,rm-mo,SUP-ESSAR-02,1200.0000,INR,kg,LME-MO,India,2026-05-01T00:00:00.000Z,true
+price-13,,rm-mn,SUP-JSW-01,185.0000,INR,kg,JSW-MN,India,2026-05-01T00:00:00.000Z,true
+price-14,,rm-fsi,SUP-JSW-01,90.0000,INR,kg,JSW-FSI,India,2026-05-01T00:00:00.000Z,true
+price-15,,rm-lm,SUP-JSW-01,12.0000,INR,kg,JSW-LIME,India,2026-05-01T00:00:00.000Z,true

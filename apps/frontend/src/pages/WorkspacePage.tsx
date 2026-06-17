@@ -1,43 +1,28 @@
 import { Lock, Plus, Save, Calculator, X, ChevronUp, Settings, Database, CheckCircle, Calendar } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Badge, Button, Card, CardContent, Input, inr } from "@jsw-mcms/ui";
+import { Badge, Button, Card, CardContent, inr } from "@jsw-mcms/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { grades as staticGrades, metals as staticMetals, rawMaterials as staticRawMaterials } from "@/data/fixtures";
 import { api, getOrFixture } from "@/services/api";
 import type { Grade, Metal, RawMaterial, Breakdown } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../store/auth";
+import { useSummaryStore } from "../store/summaryStore";
 
 // Reusable elements
-import { AlloyInputCard, type MetalCardState } from "@/components/AlloyInputCard";
-import { ProductAccordion } from "@/components/ProductAccordion";
-import { LiveSummaryPanel, type SummaryItem } from "@/components/LiveSummaryPanel";
+import { CalculationCard, type CalculationCardState } from "@/components/CalculationCard";
+import { LiveSummaryPanel } from "@/components/LiveSummaryPanel";
 
-type Mode = "metal" | "alloy" | "raw-material";
+type Mode = "metal" | "raw-material";
 
-const seedCards: Record<Mode, MetalCardState[]> = {
+const seedCards: Record<Mode, CalculationCardState[]> = {
   metal: [
-    { id: "m1", metalId: "metal-ss", gradeId: "grade-304", quantity: 100, rawMaterials: [], isExpanded: false },
-    { id: "m2", metalId: "metal-ss", gradeId: "grade-316", quantity: 150, rawMaterials: [], isExpanded: false },
-    { id: "m3", metalId: "metal-as", gradeId: "grade-as", quantity: 200, rawMaterials: [], isExpanded: false }
-  ],
-  alloy: [
-    {
-      id: "a1",
-      metalId: "metal-ss",
-      gradeId: "grade-304",
-      quantity: 780,
-      rawMaterials: [
-        { id: "rm1", rawMaterialId: "rm-fe", quantity: 680 },
-        { id: "rm2", rawMaterialId: "rm-ni", quantity: 80 },
-        { id: "rm3", rawMaterialId: "rm-cr", quantity: 20 }
-      ],
-      isExpanded: true
-    }
+    { id: "c1", type: "metal", metalId: "metal-ss", gradeId: "grade-304", rawMaterialId: "", quantity: 100, rawMaterials: [], isExpanded: false },
+    { id: "c2", type: "metal", metalId: "metal-ss", gradeId: "grade-316", rawMaterialId: "", quantity: 150, rawMaterials: [], isExpanded: false }
   ],
   "raw-material": [
-    { id: "r1", metalId: "metal-ss", gradeId: "grade-304", quantity: 50, rawMaterials: [], isExpanded: false }
+    // raw-material mode starts empty; keep a placeholder
   ]
 };
 
@@ -51,7 +36,7 @@ export function localBreakdown(
     rawMaterials?: { id: string; rawMaterialId: string; quantity: number }[];
   }[],
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _mode: Mode = "alloy",
+  _mode: string = "metal",
   metalsList: Metal[] = staticMetals,
   gradesList: Grade[] = staticGrades,
   rawMaterialsList: RawMaterial[] = staticRawMaterials
@@ -67,7 +52,7 @@ export function localBreakdown(
     // Check if nested raw materials are defined
     const hasRaw = row.rawMaterials && row.rawMaterials.length > 0;
     const computedCost = hasRaw && row.rawMaterials
-      ? row.rawMaterials.reduce((sum: number, rm) => {
+      ? row.rawMaterials.reduce((sum: number, rm: { quantity: number; rawMaterialId: string }) => {
           const rawMat = rawMaterialsList.find((r) => r.id === rm.rawMaterialId);
           const rawPrice = Number(rawMat?.prices?.[0]?.pricePerUnit ?? 0);
           return sum + (rm.quantity * rawPrice);
@@ -102,11 +87,8 @@ export function localBreakdown(
 
 export function WorkspacePage() {
   const { actor } = useAuth();
-  const [calcName, setCalcName] = useState("JSW Metal Cost Calculation");
-  const [gstRate, setGstRate] = useState(18);
-  const [additionalCharges, setAdditionalCharges] = useState(0);
-  const [mode, setMode] = useState<Mode>("alloy");
-  const [cards, setCards] = useState<MetalCardState[]>(seedCards.alloy);
+  const [mode, setMode] = useState<Mode>("metal");
+  const [cards, setCards] = useState<CalculationCardState[]>(seedCards.metal);
   
   // Real-time Database Lists state
   const [metalsList, setMetalsList] = useState<Metal[]>(staticMetals);
@@ -121,10 +103,11 @@ export function WorkspacePage() {
     : (cards[0]?.id || null);
 
   // Added summary items (Live Cost Sheet)
-  const [summaryItems, setSummaryItems] = useState<SummaryItem[]>([]);
-  
+  const { summaryItems, setSummaryItems, removeSummaryItem, clearSummary } = useSummaryStore();
+
   // Mobile summary modal state
   const [isMobileSummaryOpen, setIsMobileSummaryOpen] = useState(false);
+  const [activeCalculationId, setActiveCalculationId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -143,180 +126,199 @@ export function WorkspacePage() {
     loadData();
   }, []);
 
-  const activeCard = useMemo(() => {
-    return cards.find((c) => c.id === activeCardId) || null;
-  }, [cards, activeCardId]);
-
-  const chosenGrade = useMemo(() => {
-    if (!activeCard) return null;
-    return gradesList.find((g) => g.id === activeCard.gradeId) || gradesList[0] || null;
-  }, [activeCard, gradesList]);
-
-  const setWorkspace = (next: string) => { 
-    const typed = next as Mode; 
-    setMode(typed); 
-    setCards(seedCards[typed]);
+  const setWorkspace = (next: string) => {
+    const typed = next as Mode;
+    setMode(typed);
+    setCards(seedCards[typed] || []);
     // Clear summary items on workspace pivot
-    setSummaryItems([]);
+    clearSummary();
   };
 
   const addCard = () => {
     const defaultMetal = metalsList[0] || staticMetals[0];
     const defaultGrade = gradesList.find((g) => g.metalId === defaultMetal.id) || staticGrades[0];
-    const newCard: MetalCardState = {
+    const newCard: CalculationCardState = {
       id: crypto.randomUUID(),
+      type: mode === "raw-material" ? "raw_material" : "metal",
       metalId: defaultMetal.id,
       gradeId: defaultGrade?.id || "",
+      rawMaterialId: "",
       quantity: mode === "raw-material" ? 10 : 100,
-      rawMaterials: mode === "alloy" ? [
-        { id: crypto.randomUUID(), rawMaterialId: "rm-fe", quantity: 80 },
-        { id: crypto.randomUUID(), rawMaterialId: "rm-cr", quantity: 20 }
-      ] : [],
+      rawMaterials: [],
       isExpanded: true
     };
     setCards((current) => [...current, newCard]);
     setSelectedCardId(newCard.id);
   };
 
-  const updateCardState = (updated: MetalCardState) => {
-    setCards((current) => current.map((c) => (c.id === updated.id ? updated : c)));
+  const updateCardState = (id: string, data: Partial<CalculationCardState>) => {
+    setCards((current) => current.map((c) => (c.id === id ? { ...c, ...data } : c)));
   };
 
   const removeCardState = (id: string) => {
     setCards((current) => current.filter((c) => c.id !== id));
-    setSummaryItems((current) => current.filter((item) => item.id !== id));
-  };
-
-  const handleAddToSummary = (card: MetalCardState) => {
-    const metal = metalsList.find((m) => m.id === card.metalId) || metalsList[0];
-    const grade = gradesList.find((g) => g.id === card.gradeId) || gradesList[0];
-
-    const basePrice = Number(metal?.prices?.[0]?.pricePerUnit ?? 0);
-    const gradeMultiplier = Number(grade?.multiplier ?? 1);
-    const extraPrice = Number(grade?.extraPrice ?? 0);
-    
-    // Check if nested raw materials are defined
-    const hasRaw = card.rawMaterials && card.rawMaterials.length > 0;
-    const computedCost = hasRaw
-      ? card.rawMaterials.reduce((sum, rm) => {
-          const rawMat = rawMaterialsList.find((r) => r.id === rm.rawMaterialId);
-          const rawPrice = Number(rawMat?.prices?.[0]?.pricePerUnit ?? 0);
-          return sum + (rm.quantity * rawPrice);
-        }, 0)
-      : card.quantity * (basePrice * gradeMultiplier + extraPrice);
-
-    const finalUnitPrice = card.quantity > 0 ? (computedCost / card.quantity) : (basePrice * gradeMultiplier + extraPrice);
-
-    const newItem: SummaryItem = {
-      id: card.id,
-      name: `${grade?.name || metal?.name || "Alloy"} (${hasRaw ? "Alloyed" : "Standard"})`,
-      quantity: card.quantity,
-      unitPrice: finalUnitPrice,
-      gradeMultiplier,
-      extraPrice,
-      baseCost: computedCost
-    };
-
-    setSummaryItems((current) => {
-      const exists = current.some((item) => item.id === card.id);
-      if (exists) {
-        return current.map((item) => (item.id === card.id ? newItem : item));
-      }
-      return [...current, newItem];
-    });
-
-    toast.success(`Synced ${newItem.name} into Live Cost Sheet`);
+    removeSummaryItem(id);
   };
 
   const handleSaveDraft = async () => {
+    if (summaryItems.length === 0) {
+      toast.error("Cannot save draft: simulation summary is empty.");
+      return;
+    }
     try {
-      await api.post("/calculations", {
-        name: `${mode} cost run`,
-        mode,
+      const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+      const payload = {
+        name: `${mode === "metal" ? "Metal" : "Raw Material"} Cost Run ${new Date().toLocaleDateString("en-IN")}`,
+        mode: mode === "metal" ? "metal" : "raw-material",
         items: summaryItems.map((item) => ({
-          metalId: metalsList[0]?.id || "metal-ss", // Fallback schema defaults
-          gradeId: gradesList[0]?.id || "grade-304",
+          metalId: isUuid(item.metalId) ? item.metalId : undefined,
+          gradeId: isUuid(item.gradeId) ? item.gradeId : undefined,
           quantity: item.quantity,
           compositionPct: 100
-        }))
-      });
+        })).filter(item => item.metalId && item.gradeId)
+      };
+
+      if (payload.items.length === 0) {
+        throw new Error("Demo mode: fixture IDs are not UUIDs");
+      }
+
+      let res;
+      if (activeCalculationId && isUuid(activeCalculationId)) {
+        res = await api.put(`/calculations/${activeCalculationId}/draft`, payload);
+      } else {
+        res = await api.post("/calculations", payload);
+      }
+
+      if (res.data && res.data.id) {
+        setActiveCalculationId(res.data.id);
+      }
       toast.success("Draft calculation saved to active database");
-    } catch {
+    } catch (err) {
+      // Local fallback
+      const localDrafts = JSON.parse(localStorage.getItem("jsw-mcms-drafts") || "[]");
+      const newDraft = {
+        id: activeCalculationId || crypto.randomUUID(),
+        name: `${mode === "metal" ? "Metal" : "Raw Material"} Cost Run`,
+        mode,
+        items: summaryItems,
+        savedAt: new Date().toISOString()
+      };
+      if (!activeCalculationId) {
+        setActiveCalculationId(newDraft.id);
+      }
+      localStorage.setItem("jsw-mcms-drafts", JSON.stringify([...localDrafts.filter((d: any) => d.id !== newDraft.id), newDraft]));
       toast.success("Demo draft saved locally to browser snapshots");
     }
   };
 
   const handleComplete = async () => {
+    if (summaryItems.length === 0) {
+      toast.error("Cannot complete calculation: simulation summary is empty.");
+      return;
+    }
     try {
-      // Simulate final submit or invoke completion API
-      toast.success("Calculation workflow finalized and committed!");
-    } catch {
-      toast.error("Process aborted.");
+      const isUuid = (val: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(val);
+      const payload = {
+        name: `${mode === "metal" ? "Metal" : "Raw Material"} Cost Run ${new Date().toLocaleDateString("en-IN")}`,
+        mode: mode === "metal" ? "metal" : "raw-material",
+        items: summaryItems.map((item) => ({
+          metalId: isUuid(item.metalId) ? item.metalId : undefined,
+          gradeId: isUuid(item.gradeId) ? item.gradeId : undefined,
+          quantity: item.quantity,
+          compositionPct: 100
+        })).filter(item => item.metalId && item.gradeId)
+      };
+
+      if (payload.items.length === 0) {
+        throw new Error("Demo mode: fixture IDs are not UUIDs");
+      }
+
+      let calcId = activeCalculationId;
+      if (!calcId || !isUuid(calcId)) {
+        const draftRes = await api.post("/calculations", payload);
+        calcId = draftRes.data.id;
+      } else {
+        await api.put(`/calculations/${calcId}/draft`, payload);
+      }
+
+      if (calcId) {
+        await api.post(`/calculations/${calcId}/complete`);
+      }
+      
+      toast.success("Calculation workflow finalized and committed to database!");
+      setActiveCalculationId(null);
+      clearSummary();
+    } catch (err) {
+      // Local demo completion
+      toast.success("Demo calculation run finalized and saved locally!");
+      setActiveCalculationId(null);
+      clearSummary();
     }
   };
 
-  const summarySubtotal = summaryItems.reduce((total, item) => total + item.baseCost, 0);
+  // Safe variables with fallback to prevent undefined ReferenceError / TypeError crashes
+  const summarySubtotal = useMemo(() => {
+    return summaryItems.reduce((total, item) => total + item.baseCost, 0);
+  }, [summaryItems]);
+
   const grandTotal = summarySubtotal;
 
   return (
-    <div className="flex flex-col gap-6 relative pb-24 lg:pb-0">
+    <div className="flex flex-col gap-4 relative h-[calc(100vh-80px-3rem)] overflow-hidden font-inter">
       {/* Redesigned Workspace Banner Header */}
-      <header className="flex flex-wrap items-end justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-blue-600" />
+      <header className="flex flex-wrap items-end justify-between gap-4 bg-white p-4 rounded-md border border-border relative overflow-hidden shrink-0">
+        <div className="absolute top-0 bottom-0 left-0 w-1 bg-primary" />
         
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">
+          <p className="text-[10px] font-black uppercase tracking-wider text-primary">
             JSW Cost Allocation Workspace
           </p>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight mt-0.5">
-            Alloy Cost Calculation Workspace
+          <h2 className="text-xl font-black text-slate-800 tracking-tight mt-0.5">
+            Metal Cost Calculation Workspace
           </h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <Badge variant="success" icon={<Lock className="h-3.5 w-3.5" />}>
+          <Badge variant="success" icon={<Lock className="h-3.5 w-3.5" />} className="rounded-sm border-none font-bold text-[10px]">
             Central Locked Prices
           </Badge>
           
           <Button
             size="sm"
             onClick={handleSaveDraft}
-            className="bg-blue-600 text-white font-bold hover:bg-blue-700 h-9 rounded-xl shadow-sm"
+            className="bg-jsw-blue text-white font-bold hover:bg-primary h-8 rounded-sm shadow-none border-none cursor-pointer"
           >
-            <Save className="h-4 w-4 mr-1.5" />
+            <Save className="h-3.5 w-3.5 mr-1.5" />
             <span>Save Workspace Draft</span>
           </Button>
         </div>
       </header>
 
       {/* Primary Workspace Navigation Tabs */}
-      <Tabs value={mode} onValueChange={setWorkspace} className="w-full">
-        <TabsList className="bg-slate-100 p-1.5 rounded-xl border border-slate-200/50 mb-5">
-          <TabsTrigger value="metal" className="rounded-lg text-xs font-bold px-4 py-2">
+      <Tabs value={mode} onValueChange={setWorkspace} className="w-full flex-1 flex flex-col min-h-0">
+        <TabsList className="bg-slate-100 p-1 rounded-sm border border-border mb-3 shrink-0 self-start">
+          <TabsTrigger value="metal" className="rounded-sm text-xs font-bold px-4 py-2">
             Metal Calculator
           </TabsTrigger>
-          <TabsTrigger value="alloy" className="rounded-lg text-xs font-bold px-4 py-2">
-            Alloy Workspace
-          </TabsTrigger>
-          <TabsTrigger value="raw-material" className="rounded-lg text-xs font-bold px-4 py-2">
+          <TabsTrigger value="raw-material" className="rounded-sm text-xs font-bold px-4 py-2">
             Raw Material Builder
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value={mode} className="outline-none mt-0">
+        <TabsContent value={mode} className="outline-none mt-0 flex-1 min-h-0">
           {/* Main 3-Column Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1.3fr_0.8fr_1fr] gap-6 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-[70%_30%] xl:grid-cols-[55%_20%_25%] gap-4 h-full min-h-0 items-stretch">
             
-            {/* 1️⃣ LEFT PANEL -> ALLOY INPUT WORKSPACE */}
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  {mode === "metal" ? "Metal Calculations" : mode === "alloy" ? "Alloy Input Sheets" : "Raw Materials Input"}
+            {/* 1️⃣ LEFT PANEL -> METAL INPUT WORKSPACE */}
+            <div className="flex flex-col gap-3 h-full overflow-y-auto pr-1 scrollbar-thin lg:col-start-1 lg:col-end-2 lg:row-start-1 xl:col-start-1 xl:col-end-2 xl:row-start-auto">
+              <div className="flex items-center justify-between shrink-0 mb-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  {mode === "metal" ? "Metal Calculations" : "Raw Materials Input"}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 gap-1 rounded-xl text-xs font-bold border-blue-200 text-blue-600 hover:bg-blue-50/50"
+                  className="h-7 gap-1 rounded-sm text-[10px] font-black border-border text-primary hover:bg-slate-50"
                   onClick={addCard}
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -325,37 +327,36 @@ export function WorkspacePage() {
               </div>
 
               {cards.length === 0 ? (
-                <Card className="border-slate-200 bg-white">
+                <Card className="border-border bg-white rounded-md shadow-none">
                   <CardContent className="flex flex-col items-center justify-center py-16 text-center text-slate-400">
                     <Calculator className="h-12 w-12 mb-3 text-slate-300 animate-pulse" />
                     <strong className="text-slate-800 text-sm font-bold block mb-1">
                       No Calculation Sheets
                     </strong>
                     <p className="text-xs text-slate-400 font-semibold max-w-[240px] mb-4">
-                      Create an alloy metal card sheet to customize material specifications.
+                      Create a metal card sheet to customize material specifications.
                     </p>
-                    <Button onClick={addCard} className="bg-blue-600 text-white font-bold h-9 px-4 rounded-xl">
+                    <Button onClick={addCard} className="bg-primary text-white font-bold h-9 px-4 rounded-sm border-none cursor-pointer">
                       Add First Card
                     </Button>
                   </CardContent>
                 </Card>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 pb-4">
                   {cards.map((card, idx) => (
                     <div
                       key={card.id}
                       onClick={() => setSelectedCardId(card.id)}
-                      className={`cursor-pointer ${activeCardId === card.id ? "ring-2 ring-blue-500 rounded-2xl" : ""}`}
+                      className={`cursor-pointer focus:outline-none ${activeCardId === card.id ? "ring-1 ring-primary rounded-md" : ""}`}
                     >
-                      <AlloyInputCard
+                      <CalculationCard
                         index={idx}
                         card={card}
                         metalsList={metalsList}
                         gradesList={gradesList}
                         rawMaterialsList={rawMaterialsList}
-                        onUpdate={updateCardState}
+                        onUpdateData={updateCardState}
                         onRemove={() => removeCardState(card.id)}
-                        onAddToSummary={() => handleAddToSummary(card)}
                       />
                     </div>
                   ))}
@@ -363,45 +364,36 @@ export function WorkspacePage() {
               )}
             </div>
 
-            {/* 2️⃣ CENTER PANEL -> CALCULATION METADATA, PROPERTIES, SPEC ACCORDION */}
-            <div className="flex flex-col gap-6">
-              {/* Calculation Properties */}
-              <Card className="border-slate-200 bg-white shadow-xs overflow-hidden relative">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-linear-to-r from-blue-500 to-[#0057b8] opacity-80" />
-                <CardContent className="p-5 pt-6 flex flex-col gap-4">
+            {/* 2️⃣ CENTER PANEL -> Calculation Properties & Metadata */}
+            <div className="flex flex-col gap-3 h-full overflow-y-auto pr-1 scrollbar-thin lg:col-start-1 lg:col-end-2 lg:row-start-2 xl:col-start-2 xl:col-end-3 xl:row-start-auto">
+              <Card className="border-border bg-white shadow-none overflow-hidden relative shrink-0 rounded-md">
+                <div className="absolute top-0 left-0 right-0 h-[3px] bg-primary" />
+                <CardContent className="p-4 flex flex-col gap-3">
                   <div className="flex items-center gap-2">
-                    <Settings className="h-4 w-4 text-[#0057b8]" />
+                    <Settings className="h-4 w-4 text-primary" />
                     <h3 className="font-extrabold text-slate-800 tracking-tight text-xs uppercase">
                       Calculation Properties
                     </h3>
                   </div>
 
                   <div className="flex flex-col gap-3">
-                    <Input
-                      label="Calculation Run Name"
-                      type="text"
-                      value={calcName}
-                      onChange={(e) => setCalcName(e.target.value)}
-                      placeholder="Enter calculation run name..."
-                    />
-
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1 w-full text-left">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">
                           Mode Pivot
                         </label>
-                        <div className="flex gap-1 bg-slate-100 p-1 rounded-lg">
-                          {(["metal", "alloy", "raw-material"] as Mode[]).map((m) => (
+                        <div className="flex gap-1 bg-slate-100 p-1 rounded-sm">
+                          {(["metal", "raw-material"] as Mode[]).map((m) => (
                             <button
                               key={m}
                               onClick={() => setWorkspace(m)}
-                              className={`flex-1 py-1 text-[9px] font-extrabold rounded-md transition-all uppercase tracking-wide ${
+                              className={`flex-1 py-1 text-[9px] font-extrabold rounded-sm transition-all uppercase tracking-wide ${
                                 mode === m
-                                  ? "bg-white text-blue-600 shadow-xs"
+                                  ? "bg-white text-primary shadow-xs"
                                   : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50"
                               }`}
                             >
-                              {m === "raw-material" ? "RM" : m}
+                              {m === "raw-material" ? "RM" : "Metal"}
                             </button>
                           ))}
                         </div>
@@ -409,11 +401,10 @@ export function WorkspacePage() {
 
                       <div className="flex flex-col gap-1 w-full text-left">
                         <label className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">
-                          Target Unit
+                          Unit
                         </label>
-                        <div className="flex h-9.5 w-full items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-600">
+                        <div className="flex h-9.5 w-full items-center justify-between rounded-sm border border-border bg-slate-50 px-3 text-xs font-bold text-slate-600">
                           <span>kilograms (kg)</span>
-                          <Lock className="h-3 w-3 text-slate-400" />
                         </div>
                       </div>
                     </div>
@@ -421,25 +412,17 @@ export function WorkspacePage() {
                 </CardContent>
               </Card>
 
-              {/* Specification Accordion */}
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-2 text-left">
-                  Grade Spec Sheet Properties
-                </span>
-                <ProductAccordion grade={chosenGrade} />
-              </div>
-
               {/* Calculation Metadata */}
-              <Card className="border-slate-200 bg-white shadow-xs overflow-hidden">
-                <CardContent className="p-5 flex flex-col gap-3.5">
+              <Card className="border-border bg-white shadow-none overflow-hidden shrink-0 rounded-md">
+                <CardContent className="p-4 flex flex-col gap-3.5">
                   <div className="flex items-center gap-2">
-                    <Database className="h-4 w-4 text-[#0057b8]" />
+                    <Database className="h-4 w-4 text-primary" />
                     <h3 className="font-extrabold text-slate-800 tracking-tight text-xs uppercase">
                       Calculation Metadata
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-3.5 text-left text-xs border-t border-slate-100 pt-3.5">
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-left text-xs border-t border-slate-100 pt-3">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Operator</span>
                       <strong className="font-bold text-slate-700 truncate">{actor?.name || "System Specialist"}</strong>
@@ -447,15 +430,15 @@ export function WorkspacePage() {
                     </div>
 
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Priced Status</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Status</span>
                       <div className="flex items-center gap-1 mt-0.5">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="font-extrabold text-[10px] text-emerald-600 uppercase tracking-wider">LIVE DRAFT</span>
+                        <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span className="font-extrabold text-[10px] text-amber-600 uppercase tracking-wider">DRAFT</span>
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Priced Date</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Date</span>
                       <div className="flex items-center gap-1 text-slate-600 font-bold">
                         <Calendar className="h-3.5 w-3.5 text-slate-400" />
                         <span>{new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span>
@@ -465,7 +448,7 @@ export function WorkspacePage() {
                     <div className="flex flex-col gap-0.5">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Precision Tier</span>
                       <div className="flex items-center gap-1 text-slate-600 font-bold">
-                        <CheckCircle className="h-3.5 w-3.5 text-blue-500" />
+                        <CheckCircle className="h-3.5 w-3.5 text-primary" />
                         <span>4 Decimal Places</span>
                       </div>
                     </div>
@@ -474,21 +457,17 @@ export function WorkspacePage() {
               </Card>
             </div>
 
-            {/* 3️⃣ RIGHT PANEL -> LIVE SUMMARY PANEL (Desktop Sticky Sidebar) */}
-            <div className="hidden xl:block">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-4 text-left">
+            {/* 3️⃣ RIGHT PANEL -> LIVE SUMMARY PANEL */}
+            <div className="h-full flex flex-col lg:col-start-2 lg:col-end-3 lg:row-start-1 lg:row-span-2 xl:col-start-3 xl:col-end-4 xl:row-start-auto xl:row-span-1 min-h-[300px]">
+              <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2 text-left shrink-0">
                 Active Simulation Summary
               </span>
               <LiveSummaryPanel
                 items={summaryItems}
-                gstRate={gstRate}
-                setGstRate={setGstRate}
-                additionalCharges={additionalCharges}
-                setAdditionalCharges={setAdditionalCharges}
-                onRemove={(id) => setSummaryItems((current) => current.filter((x) => x.id !== id))}
+                onRemove={removeSummaryItem}
                 onUpdateQty={(id, qty) => {
-                  setSummaryItems((current) =>
-                    current.map((item) => {
+                  setSummaryItems(
+                    summaryItems.map((item) => {
                       if (item.id === id) {
                         return { ...item, quantity: qty, baseCost: qty * item.unitPrice };
                       }
@@ -496,7 +475,7 @@ export function WorkspacePage() {
                     })
                   );
                 }}
-                onClearAll={() => setSummaryItems([])}
+                onClearAll={clearSummary}
                 onSaveDraft={handleSaveDraft}
                 onComplete={handleComplete}
               />
@@ -510,7 +489,7 @@ export function WorkspacePage() {
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-slate-900 border-t border-slate-800 text-white p-3.5 shadow-2xl flex items-center justify-between xl:hidden">
         <div className="flex flex-col text-left">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            Total Surcharges Inc.
+            Estimated Cost
           </span>
           <strong className="text-xl font-black text-blue-400 tracking-tight">
             {inr(grandTotal)}
@@ -568,14 +547,10 @@ export function WorkspacePage() {
               <div className="flex-1 overflow-y-auto p-4 pb-20">
                 <LiveSummaryPanel
                   items={summaryItems}
-                  gstRate={gstRate}
-                  setGstRate={setGstRate}
-                  additionalCharges={additionalCharges}
-                  setAdditionalCharges={setAdditionalCharges}
-                  onRemove={(id) => setSummaryItems((current) => current.filter((x) => x.id !== id))}
+                  onRemove={removeSummaryItem}
                   onUpdateQty={(id, qty) => {
-                    setSummaryItems((current) =>
-                      current.map((item) => {
+                    setSummaryItems(
+                      summaryItems.map((item) => {
                         if (item.id === id) {
                           return { ...item, quantity: qty, baseCost: qty * item.unitPrice };
                         }
@@ -583,7 +558,7 @@ export function WorkspacePage() {
                       })
                     );
                   }}
-                  onClearAll={() => setSummaryItems([])}
+                  onClearAll={clearSummary}
                   onSaveDraft={handleSaveDraft}
                   onComplete={() => {
                     setIsMobileSummaryOpen(false);

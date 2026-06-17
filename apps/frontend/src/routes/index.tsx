@@ -13,6 +13,7 @@ const AuditPage = lazy(() => import("../pages/OperationsPages").then(m => ({ def
 const MastersPage = lazy(() => import("../pages/OperationsPages").then(m => ({ default: m.MastersPage })));
 const ReportsPage = lazy(() => import("../pages/OperationsPages").then(m => ({ default: m.ReportsPage })));
 const WorkspacePage = lazy(() => import("../pages/WorkspacePage").then(m => ({ default: m.WorkspacePage })));
+const LandingPage = lazy(() => import("../pages/LandingPage").then(m => ({ default: m.LandingPage })));
 
 const Page404 = lazy(() => import("../pages/ErrorPages").then(m => ({ default: m.Page404 })));
 const Page403 = lazy(() => import("../pages/ErrorPages").then(m => ({ default: m.Page403 })));
@@ -49,15 +50,15 @@ function RoleGuard({ allowedRoles }: RoleGuardProps) {
   const { actor } = useAuth();
   if (!actor) return <Navigate to="/login" replace />;
   if (!allowedRoles.includes(actor.role)) {
-    return <Navigate to={actor.role === "USER" ? "/workspace" : "/dashboard"} replace />;
+    return <Navigate to="/unauthorized" replace />;
   }
   return <Outlet />;
 }
 
 function DefaultRedirect() {
   const { actor } = useAuth();
-  if (!actor) return <Navigate to="/login" replace />;
-  return <Navigate to={actor.role === "USER" ? "/workspace" : "/dashboard"} replace />;
+  if (!actor) return <Navigate to="/" replace />;
+  return <Navigate to="/dashboard" replace />;
 }
 
 export function AppRoutes() {
@@ -65,31 +66,25 @@ export function AppRoutes() {
     <ErrorBoundary>
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           
           <Route element={<ProtectedLayout />}>
-            {/* Dashboard - Employee & Admin only */}
-            <Route element={<RoleGuard allowedRoles={["ADMIN", "EMPLOYEE"]} />}>
+            {/* Pages accessible by both COSTING_DEPARTMENT and PDQC */}
+            <Route element={<RoleGuard allowedRoles={["COSTING_DEPARTMENT", "PDQC"]} />}>
               <Route path="/dashboard" element={<DashboardPage />} />
-            </Route>
-
-            {/* Calculator base & reports - Publicly accessible protected pages */}
-            <Route element={<RoleGuard allowedRoles={["ADMIN", "EMPLOYEE", "USER"]} />}>
               <Route path="/workspace" element={<WorkspacePage />} />
-              <Route path="/comparison" element={<ComparisonPage />} />
+              <Route path="/grade-builder" element={<MastersPage focus="grade-builder" />} />
+              <Route path="/grade-comparison" element={<ComparisonPage />} />
               <Route path="/reports" element={<ReportsPage />} />
             </Route>
 
-            {/* Employee & Admin only pages */}
-            <Route element={<RoleGuard allowedRoles={["ADMIN", "EMPLOYEE"]} />}>
-              <Route path="/masters" element={<MastersPage />} />
-              <Route path="/suppliers" element={<MastersPage focus="suppliers" />} />
-              <Route path="/audit" element={<AuditPage />} />
-            </Route>
-
-            {/* Admin only pages */}
-            <Route element={<RoleGuard allowedRoles={["ADMIN"]} />}>
-              <Route path="/users" element={<MastersPage focus="users" />} />
+            {/* Pages restricted to COSTING_DEPARTMENT only */}
+            <Route element={<RoleGuard allowedRoles={["COSTING_DEPARTMENT"]} />}>
+              <Route path="/material-master" element={<MastersPage focus="material-master" />} />
+              <Route path="/material-rates" element={<MastersPage focus="material-rates" />} />
+              <Route path="/audit-logs" element={<AuditPage />} />
+              <Route path="/user-management" element={<MastersPage focus="user-management" />} />
               <Route path="/settings" element={<MastersPage focus="settings" />} />
             </Route>
 
@@ -98,6 +93,7 @@ export function AppRoutes() {
           </Route>
           
           {/* Public error testing routes */}
+          <Route path="/unauthorized" element={<Page403 />} />
           <Route path="/403" element={<Page403 />} />
           <Route path="/500" element={<Page500 />} />
           <Route path="/maintenance" element={<PageMaintenance />} />

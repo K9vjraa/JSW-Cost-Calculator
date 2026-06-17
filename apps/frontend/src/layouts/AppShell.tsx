@@ -11,13 +11,14 @@ import {
   Menu, 
   Settings, 
   ShieldCheck, 
-  Truck, 
   Users, 
   X, 
   Search, 
   ChevronLeft, 
   ChevronRight, 
-  User
+  User,
+  Layers,
+  DollarSign
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -34,15 +35,16 @@ import { ToastContainer } from "../components/ToastContainer";
 import { NotificationPanel } from "../components/NotificationPanel";
 
 const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: FileBarChart2, roles: ["ADMIN", "EMPLOYEE"] },
-  { to: "/workspace", label: "Calculation Workspace", icon: Calculator, roles: ["ADMIN", "EMPLOYEE", "USER"] },
-  { to: "/comparison", label: "Comparison", icon: GitCompareArrows, roles: ["ADMIN", "EMPLOYEE", "USER"] },
-  { to: "/masters", label: "Masters & Pricing", icon: Boxes, roles: ["ADMIN", "EMPLOYEE"] },
-  { to: "/suppliers", label: "Suppliers", icon: Truck, roles: ["ADMIN", "EMPLOYEE"] },
-  { to: "/reports", label: "Reports", icon: ClipboardList, roles: ["ADMIN", "EMPLOYEE", "USER"] },
-  { to: "/audit", label: "Audit & Alerts", icon: ShieldCheck, roles: ["ADMIN", "EMPLOYEE"] },
-  { to: "/users", label: "Users & Roles", icon: Users, roles: ["ADMIN"] },
-  { to: "/settings", label: "Cost Settings", icon: Settings, roles: ["ADMIN"] }
+  { to: "/dashboard", label: "Dashboard", icon: FileBarChart2, roles: ["COSTING_DEPARTMENT", "PDQC"] },
+  { to: "/workspace", label: "Calculation Workspace", icon: Calculator, roles: ["COSTING_DEPARTMENT", "PDQC"] },
+  { to: "/material-master", label: "Material Master", icon: Boxes, roles: ["COSTING_DEPARTMENT"] },
+  { to: "/material-rates", label: "Material Rates", icon: DollarSign, roles: ["COSTING_DEPARTMENT"] },
+  { to: "/grade-builder", label: "Grade Builder", icon: Layers, roles: ["COSTING_DEPARTMENT", "PDQC"] },
+  { to: "/grade-comparison", label: "Grade Comparison", icon: GitCompareArrows, roles: ["COSTING_DEPARTMENT", "PDQC"] },
+  { to: "/reports", label: "Reports", icon: ClipboardList, roles: ["COSTING_DEPARTMENT", "PDQC"] },
+  { to: "/audit-logs", label: "Audit Logs", icon: ShieldCheck, roles: ["COSTING_DEPARTMENT"] },
+  { to: "/user-management", label: "User Management", icon: Users, roles: ["COSTING_DEPARTMENT"] },
+  { to: "/settings", label: "Settings", icon: Settings, roles: ["COSTING_DEPARTMENT"] }
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -53,8 +55,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const prefetchRoute = (to: string) => {
     if (to === "/dashboard") import("../pages/Dashboards");
     else if (to === "/workspace") import("../pages/WorkspacePage");
-    else if (to === "/comparison") import("../pages/ComparisonPage");
-    else if (to === "/masters" || to === "/suppliers" || to === "/users" || to === "/settings" || to === "/reports") {
+    else if (to === "/grade-comparison") import("../pages/ComparisonPage");
+    else if (
+      to === "/material-master" ||
+      to === "/material-rates" ||
+      to === "/grade-builder" ||
+      to === "/user-management" ||
+      to === "/settings" ||
+      to === "/reports"
+    ) {
       import("../pages/OperationsPages");
     }
   };
@@ -121,30 +130,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // Dynamic breadcrumb generation matching route definitions
   const breadcrumbs = useMemo(() => {
     const path = location.pathname;
-    const defaultHome = actor?.role === "USER" ? "/workspace" : "/dashboard";
+    const defaultHome = "/dashboard";
     const items = [{ label: "JSW MCMS", to: defaultHome }];
     
     if (path === "/dashboard") {
       items.push({ label: "Dashboard", to: "/dashboard" });
     } else if (path === "/workspace") {
       items.push({ label: "Costing Workspace", to: "/workspace" });
-    } else if (path === "/comparison") {
-      items.push({ label: "Grade Comparison", to: "/comparison" });
-    } else if (path === "/masters") {
-      items.push({ label: "Operations", to: "/masters" });
-      items.push({ label: "Masters & Pricing", to: "/masters" });
-    } else if (path === "/suppliers") {
-      items.push({ label: "Operations", to: "/masters" });
-      items.push({ label: "Suppliers Profile", to: "/suppliers" });
+    } else if (path === "/grade-comparison") {
+      items.push({ label: "Grade Comparison", to: "/grade-comparison" });
+    } else if (path === "/material-master") {
+      items.push({ label: "Operations", to: "/material-master" });
+      items.push({ label: "Material Master", to: "/material-master" });
+    } else if (path === "/material-rates") {
+      items.push({ label: "Operations", to: "/material-rates" });
+      items.push({ label: "Material Rates", to: "/material-rates" });
+    } else if (path === "/grade-builder") {
+      items.push({ label: "Operations", to: "/grade-builder" });
+      items.push({ label: "Grade Builder", to: "/grade-builder" });
     } else if (path === "/reports") {
       items.push({ label: "Operations", to: "/reports" });
       items.push({ label: "Reports Ledger", to: "/reports" });
-    } else if (path === "/audit") {
-      items.push({ label: "Operations", to: "/masters" });
-      items.push({ label: "System Audits", to: "/audit" });
-    } else if (path === "/users") {
-      items.push({ label: "Management", to: "/users" });
-      items.push({ label: "Users & Roles", to: "/users" });
+    } else if (path === "/audit-logs") {
+      items.push({ label: "Operations", to: "/audit-logs" });
+      items.push({ label: "System Audits", to: "/audit-logs" });
+    } else if (path === "/user-management") {
+      items.push({ label: "Management", to: "/user-management" });
+      items.push({ label: "User Management", to: "/user-management" });
     } else if (path === "/settings") {
       items.push({ label: "Management", to: "/settings" });
       items.push({ label: "Cost Settings", to: "/settings" });
@@ -163,17 +175,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 
   return (
-    <div className="min-h-screen bg-[#f5f8fc] text-[#10233d] flex">
+    <div className="min-h-screen bg-background text-foreground flex">
       {/* ───────── 1. DESKTOP SIDEBAR ───────── */}
       <motion.aside
         animate={{ width: isSidebarCollapsed ? 76 : 260 }}
         transition={{ type: "spring", damping: 25, stiffness: 220 }}
-        className="hidden lg:flex flex-col bg-[#032f67] text-white sticky top-0 h-screen z-40 border-r border-white/10 shrink-0 overflow-hidden"
+        className="hidden lg:flex flex-col bg-white text-slate-800 sticky top-0 h-screen z-40 border-r border-slate-200 shrink-0 overflow-hidden"
         role="navigation"
         aria-label="Main navigation"
       >
         {/* Brand header */}
-        <div className="flex h-20 items-center justify-between border-b border-white/15 px-4.5 shrink-0">
+        <div className="flex h-20 items-center justify-between border-b border-slate-200 px-4.5 shrink-0">
           <AnimatePresence mode="wait">
             {!isSidebarCollapsed ? (
               <motion.div
@@ -184,8 +196,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 transition={{ duration: 0.15 }}
                 className="text-left overflow-hidden"
               >
-                <div className="text-2xl font-black italic tracking-wide text-white">JSW</div>
-                <div className="text-[10px] text-white/70 uppercase tracking-widest font-extrabold mt-0.5 whitespace-nowrap">
+                <div className="text-2xl font-black italic tracking-wide text-[#002652]">JSW</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold mt-0.5 whitespace-nowrap">
                   Cost Management System
                 </div>
               </motion.div>
@@ -196,7 +208,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
-                className="mx-auto text-xl font-black italic tracking-wider text-blue-400"
+                className="mx-auto text-xl font-black italic tracking-wider text-[#002652]"
               >
                 JSW
               </motion.div>
@@ -205,7 +217,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="text-white/60 hover:text-white hover:bg-white/10 rounded-md p-1 cursor-pointer transition-colors shrink-0 ml-auto"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-md p-1 cursor-pointer transition-colors shrink-0 ml-auto"
             title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
@@ -214,7 +226,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1.5 scrollbar-thin" aria-label="Pages">
+        <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1" aria-label="Pages">
           {visibleNavItems.map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to;
             return (
@@ -223,16 +235,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 to={to}
                 title={isSidebarCollapsed ? label : undefined}
                 onMouseEnter={() => prefetchRoute(to)}
-                className={`flex h-11 items-center gap-3 rounded-lg transition-all decoration-none overflow-hidden ${
-                  isSidebarCollapsed ? "px-0 justify-center" : "px-3.5"
+                className={`flex h-10 items-center gap-3 rounded-md transition-all decoration-none overflow-hidden ${
+                  isSidebarCollapsed ? "px-0 justify-center" : "px-3"
                 } ${
                   isActive 
-                    ? "bg-[#0b63c8] text-white shadow-md border-l-4 border-white" 
-                    : "text-white/80 hover:bg-white/10 hover:text-white"
+                    ? "bg-slate-100 text-[#002652] font-semibold border border-slate-200" 
+                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon className={`size-4 shrink-0 text-current ${isSidebarCollapsed ? "mx-auto" : ""}`} />
+                <Icon className={`size-4 shrink-0 ${isActive ? "text-[#002652]" : "text-slate-500"}`} />
                 <AnimatePresence>
                   {!isSidebarCollapsed && (
                     <motion.span
@@ -240,7 +252,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       animate={{ opacity: 1, width: "auto" }}
                       exit={{ opacity: 0, width: 0 }}
                       transition={{ duration: 0.12 }}
-                      className="truncate text-left text-xs font-bold whitespace-nowrap"
+                      className="truncate text-left text-xs font-semibold whitespace-nowrap"
                     >
                       {label}
                     </motion.span>
@@ -253,12 +265,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* User panel */}
         {actor && (
-          <div className="border-t border-white/15 p-4 flex items-center gap-2 overflow-hidden shrink-0">
+          <div className="border-t border-slate-200 p-4 flex items-center gap-2 overflow-hidden shrink-0">
             {!isSidebarCollapsed ? (
               <SidebarUserPanel name={actor.name} role={actor.role} />
             ) : (
               <div
-                className="mx-auto rounded-full bg-white/10 p-2 text-white/80 cursor-pointer hover:bg-white/20 transition-colors"
+                className="mx-auto rounded-full bg-slate-50 p-2 text-slate-600 cursor-pointer hover:bg-slate-100 transition-colors"
                 title={`${actor.name} (${actor.role})`}
                 onClick={handleLogout}
               >
@@ -285,7 +297,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
               onClick={() => setMobileSidebarOpen(false)}
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px]"
               aria-hidden="true"
             />
             
@@ -295,19 +307,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="relative flex w-[280px] max-w-[85vw] flex-col bg-[#032f67] text-white h-full shadow-2xl z-10"
+              className="relative flex w-[280px] max-w-[85vw] flex-col bg-white text-slate-800 h-full z-10 border-r border-slate-200"
             >
               {/* Drawer header */}
-              <div className="flex h-20 items-center justify-between border-b border-white/15 px-5 shrink-0">
+              <div className="flex h-20 items-center justify-between border-b border-slate-200 px-5 shrink-0">
                 <div className="text-left">
-                  <div className="text-2xl font-black italic tracking-wide text-white">JSW</div>
-                  <div className="text-[10px] text-white/70 uppercase tracking-widest font-extrabold mt-0.5">
+                  <div className="text-2xl font-black italic tracking-wide text-[#002652]">JSW</div>
+                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold mt-0.5">
                     Metal Cost System
                   </div>
                 </div>
                 <button
                   onClick={() => setMobileSidebarOpen(false)}
-                  className="text-white hover:bg-white/10 rounded-md p-1.5 cursor-pointer transition-colors"
+                  className="text-slate-500 hover:bg-slate-100 rounded-md p-1.5 cursor-pointer transition-colors"
                   aria-label="Close navigation menu"
                 >
                   <X className="size-5" />
@@ -315,7 +327,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
 
               {/* Drawer nav */}
-              <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1.5 scrollbar-thin" aria-label="Mobile pages">
+              <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1" aria-label="Mobile pages">
                 {visibleNavItems.map(({ to, label, icon: Icon }) => (
                   <NavLink
                     key={to}
@@ -323,10 +335,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     onClick={() => setMobileSidebarOpen(false)}
                     onMouseEnter={() => prefetchRoute(to)}
                     className={({ isActive }) =>
-                      `flex h-11 items-center gap-3 rounded-lg px-3.5 text-xs font-bold transition-all decoration-none ${
+                      `flex h-10 items-center gap-3 rounded-md px-3.5 text-xs font-semibold transition-all decoration-none ${
                         isActive 
-                          ? "bg-[#0b63c8] text-white shadow-md border-l-4 border-white" 
-                          : "text-white/80 hover:bg-white/10 hover:text-white"
+                          ? "bg-slate-100 text-[#002652] border border-slate-200" 
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                       }`
                     }
                   >
@@ -338,14 +350,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
               {/* Drawer user panel + logout */}
               {actor && (
-                <div className="border-t border-white/15 p-4 text-left shrink-0">
+                <div className="border-t border-slate-200 p-4 text-left shrink-0">
                   <SidebarUserPanel name={actor.name} role={actor.role} />
                   <Button
                     variant="danger"
                     size="sm"
                     onClick={handleLogout}
                     leftIcon={<LogOut className="size-3.5" />}
-                    className="w-full text-xs font-bold py-1.5 justify-center rounded-lg mt-3"
+                    className="w-full text-xs font-bold py-1.5 justify-center rounded-md mt-3"
                   >
                     Sign Out
                   </Button>
@@ -361,14 +373,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         
         {/* ── TOP NAVBAR ── */}
         <header
-          className="sticky top-0 z-20 flex h-20 items-center border-b border-[#d6dfeb] navbar-glass px-4 lg:px-6 justify-between shadow-xs shrink-0"
+          className="sticky top-0 z-20 flex h-20 items-center border-b border-slate-200 bg-white px-4 lg:px-6 justify-between shrink-0"
           role="banner"
         >
           {/* Left: Hamburger + Breadcrumb */}
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden border border-slate-200 rounded-lg p-2 hover:bg-slate-50 cursor-pointer transition-colors shrink-0"
+              className="lg:hidden border border-slate-200 rounded-md p-2 hover:bg-slate-50 cursor-pointer transition-colors shrink-0"
               aria-label="Open navigation menu"
               aria-expanded={mobileSidebarOpen}
             >
@@ -382,8 +394,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {idx > 0 && <ChevronRight className="size-3.5 text-slate-300" aria-hidden="true" />}
                   <NavLink
                     to={crumb.to}
-                    className={`hover:text-[#0057b8] transition-colors decoration-none ${
-                      idx === breadcrumbs.length - 1 ? "text-slate-700 font-black" : "font-semibold"
+                    className={`hover:text-[#002652] transition-colors decoration-none ${
+                      idx === breadcrumbs.length - 1 ? "text-slate-700 font-bold" : "font-medium"
                     }`}
                     aria-current={idx === breadcrumbs.length - 1 ? "page" : undefined}
                   >
@@ -394,7 +406,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
             
             {/* Mobile page title */}
-            <div className="sm:hidden text-left font-black text-xs uppercase tracking-wider text-slate-700 truncate">
+            <div className="sm:hidden text-left font-bold text-xs uppercase tracking-wider text-slate-700 truncate">
               {breadcrumbs[breadcrumbs.length - 1]?.label || "JSW Steel"}
             </div>
           </div>
@@ -405,7 +417,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Search bar (desktop) */}
             <div 
               onClick={() => setSearchOpen(true)}
-              className="hidden md:flex items-center gap-2 border border-[#d6dfeb] hover:border-[#0057b8]/60 bg-slate-50 hover:bg-white transition-all rounded-xl px-3 py-1.5 cursor-pointer text-slate-400 text-xs w-44 xl:w-56 select-none"
+              className="hidden md:flex items-center gap-2 border border-slate-200 hover:border-[#002652]/60 bg-slate-50 hover:bg-white transition-all rounded-md px-3 py-1.5 cursor-pointer text-slate-400 text-xs w-44 xl:w-56 select-none"
               role="button"
               aria-label="Open quick search (Ctrl+K)"
               tabIndex={0}
@@ -413,7 +425,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Search className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
               <span className="font-medium text-left flex-1 text-slate-500">Quick Search...</span>
-              <kbd className="bg-white border border-slate-200 shadow-xs rounded px-1 text-[9px] font-mono text-slate-400">
+              <kbd className="bg-white border border-slate-200 rounded px-1 text-[9px] font-mono text-slate-400">
                 Ctrl+K
               </kbd>
             </div>
@@ -421,7 +433,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Search button (mobile) */}
             <button 
               onClick={() => setSearchOpen(true)}
-              className="md:hidden border border-[#d6dfeb] rounded-lg p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors"
+              className="md:hidden border border-slate-200 rounded-md p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors"
               aria-label="Open search"
             >
               <Search className="size-4" />
@@ -431,8 +443,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="relative">
               <button
                 onClick={() => { setNoticeOpen(true); setProfileOpen(false); }}
-                className={`relative border border-[#d6dfeb] rounded-lg p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors ${
-                  noticeOpen ? "bg-slate-100 border-[#0057b8]" : ""
+                className={`relative border border-slate-200 rounded-md p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors ${
+                  noticeOpen ? "bg-slate-100 border-[#002652]" : ""
                 }`}
                 aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
                 aria-expanded={noticeOpen}
@@ -441,7 +453,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <Bell className="size-4" />
                 {unreadCount > 0 && (
                   <span
-                    className="absolute -top-1.5 -right-1.5 rounded-full bg-[#d63031] text-[9px] text-white px-1.5 py-0.5 font-bold shadow-xs"
+                    className="absolute -top-1.5 -right-1.5 rounded-full bg-[#dc2626] text-[9px] text-white px-1.5 py-0.5 font-bold"
                     aria-hidden="true"
                   >
                     {unreadCount}
@@ -455,21 +467,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="relative">
                 <button
                   onClick={() => { setProfileOpen(!profileOpen); setNoticeOpen(false); }}
-                  className={`flex items-center gap-2 border border-[#d6dfeb] hover:border-[#0057b8] rounded-xl p-1.5 pr-2.5 bg-slate-50 hover:bg-white cursor-pointer transition-all ${
-                    profileOpen ? "border-[#0057b8]" : ""
+                  className={`flex items-center gap-2 border border-slate-200 hover:border-[#002652] rounded-md p-1.5 pr-2.5 bg-slate-50 hover:bg-white cursor-pointer transition-all ${
+                    profileOpen ? "border-[#002652]" : ""
                   }`}
                   aria-label="Profile menu"
                   aria-expanded={profileOpen}
                   aria-haspopup="true"
                 >
-                  <div className="rounded-lg bg-[#e8f0fb] text-[#0057b8] p-1 flex items-center justify-center size-6.5 shrink-0 font-extrabold text-[10px]">
+                  <div className="rounded-sm bg-slate-200 text-slate-800 p-1 flex items-center justify-center size-6.5 shrink-0 font-bold text-[10px]">
                     {actor.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="hidden md:flex flex-col text-left">
-                    <span className="text-[10px] font-black text-slate-800 leading-none truncate max-w-20">
+                    <span className="text-[10px] font-bold text-slate-800 leading-none truncate max-w-20">
                       {actor.name.split(" ")[0]}
                     </span>
-                    <span className="text-[8px] font-extrabold text-slate-400 uppercase tracking-widest mt-0.5 leading-none">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 leading-none">
                       {actor.role}
                     </span>
                   </div>
@@ -484,18 +496,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 5 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-3 w-56 rounded-xl border border-[#d6dfeb] bg-white p-3 shadow-xl z-20 text-left flex flex-col gap-2"
+                        className="absolute right-0 mt-3 w-56 rounded-md border border-slate-200 bg-white p-3 z-20 text-left flex flex-col gap-2"
                         role="menu"
                         aria-label="Profile options"
                       >
                         <div className="p-1 pb-2 border-b border-slate-100">
-                          <strong className="block text-xs font-black text-slate-800">{actor.name}</strong>
-                          <span className="block text-[9px] font-extrabold text-[#56657a] uppercase tracking-wider mt-0.5">
+                          <strong className="block text-xs font-bold text-slate-800">{actor.name}</strong>
+                          <span className="block text-[9px] font-semibold text-[#56657a] uppercase tracking-wider mt-0.5">
                             {actor.role} Account
                           </span>
                         </div>
                         
-                        <div className="py-1 flex flex-col gap-1 text-[10px] font-bold text-slate-500">
+                        <div className="py-1 flex flex-col gap-1 text-[10px] font-semibold text-slate-500">
                           <div
                             className="px-2 py-1 flex items-center gap-1.5 hover:bg-slate-50 rounded cursor-pointer transition-colors"
                             role="menuitem"
@@ -519,7 +531,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           size="sm"
                           onClick={handleLogout}
                           leftIcon={<LogOut className="size-3.5" />}
-                          className="w-full text-xs font-bold py-1.5 justify-center rounded-lg mt-1"
+                          className="w-full text-xs font-bold py-1.5 justify-center rounded-md mt-1"
                         >
                           Sign Out Session
                         </Button>

@@ -19,6 +19,11 @@
     "seed": "npm run seed --workspace @jsw-mcms/backend"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "prisma": "^6.19.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "@supabase/supabase-js": "^2.108.1"
   }
 }

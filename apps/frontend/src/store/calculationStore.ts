@@ -1,15 +1,15 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { MetalCardState } from "../components/AlloyInputCard";
+import type { CalculationCardState } from "../components/CalculationCard";
 import type { SummaryItem } from "../components/LiveSummaryPanel";
 
 export interface CalculationState {
-  cards: MetalCardState[];
+  cards: CalculationCardState[];
   summaryItems: SummaryItem[];
   orderQuantity: number;
-  setCards: (cards: MetalCardState[]) => void;
-  addCard: (card: MetalCardState) => void;
-  updateCard: (card: MetalCardState) => void;
+  setCards: (cards: CalculationCardState[]) => void;
+  addCard: (card: CalculationCardState) => void;
+  updateCard: (card: CalculationCardState) => void;
   removeCard: (id: string) => void;
   setSummaryItems: (items: SummaryItem[]) => void;
   addSummaryItem: (item: SummaryItem) => void;
@@ -26,13 +26,13 @@ export const useCalculationStore = create<CalculationState>()(
       summaryItems: [],
       orderQuantity: 1000,
 
-      setCards: (cards: MetalCardState[]) => set({ cards }),
+      setCards: (cards: CalculationCardState[]) => set({ cards }),
       
-      addCard: (card: MetalCardState) => set((state) => ({ 
+      addCard: (card: CalculationCardState) => set((state) => ({ 
         cards: [...state.cards, card] 
       })),
       
-      updateCard: (updated: MetalCardState) => set((state) => ({
+      updateCard: (updated: CalculationCardState) => set((state) => ({
         cards: state.cards.map((c) => (c.id === updated.id ? updated : c))
       })),
       

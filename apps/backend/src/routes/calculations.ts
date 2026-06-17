@@ -201,7 +201,7 @@ const calculationSortFields = ["batchId", "name", "mode", "status", "totalQuanti
  */
 calculationRoutes.post(
   "/preview",
-  allowRoles("ADMIN", "EMPLOYEE", "USER"),
+  allowRoles("COSTING_DEPARTMENT", "PDQC"),
   asyncRoute(async (req, res) => {
     res.json(await resolvePreview(calculationSchema.parse(req.body)));
   })
@@ -213,7 +213,7 @@ calculationRoutes.post(
  */
 calculationRoutes.post(
   "/",
-  allowRoles("ADMIN", "EMPLOYEE", "USER"),
+  allowRoles("COSTING_DEPARTMENT", "PDQC"),
   asyncRoute(async (req, res) => {
     res.status(201).json(
       await saveCalculation(req as any, calculationSchema.parse(req.body), "DRAFT")
@@ -234,7 +234,7 @@ calculationRoutes.get(
     const sort = tableSort(req.query, calculationSortFields, "updatedAt", "desc");
 
     const baseWhere =
-      req.actor!.role === "ADMIN" || req.actor!.role === "EMPLOYEE"
+      req.actor!.role === "COSTING_DEPARTMENT"
         ? {}
         : { userId: req.actor!.id };
 
@@ -296,8 +296,7 @@ calculationRoutes.get(
     });
     if (
       !row ||
-      (req.actor!.role !== "ADMIN" &&
-        req.actor!.role !== "EMPLOYEE" &&
+      (req.actor!.role !== "COSTING_DEPARTMENT" &&
         row.userId !== req.actor!.id)
     ) {
       throw new ApiError(404, "Calculation not found.");
@@ -312,12 +311,12 @@ calculationRoutes.get(
  */
 calculationRoutes.put(
   "/:id/draft",
-  allowRoles("ADMIN", "EMPLOYEE", "USER"),
+  allowRoles("COSTING_DEPARTMENT", "PDQC"),
   asyncRoute(async (req, res) => {
     const current = await prisma.calculation.findUnique({
       where: { id: String(req.params.id) }
     });
-    if (!current || (current.userId !== req.actor!.id && req.actor!.role !== "ADMIN")) {
+    if (!current || (current.userId !== req.actor!.id && req.actor!.role !== "COSTING_DEPARTMENT")) {
       throw new ApiError(404, "Draft calculation not found.");
     }
     if (current.status !== "DRAFT") {
@@ -335,12 +334,12 @@ calculationRoutes.put(
  */
 calculationRoutes.post(
   "/:id/complete",
-  allowRoles("ADMIN", "EMPLOYEE", "USER"),
+  allowRoles("COSTING_DEPARTMENT", "PDQC"),
   asyncRoute(async (req, res) => {
     const row = await prisma.calculation.findUnique({
       where: { id: String(req.params.id) }
     });
-    if (!row || (row.userId !== req.actor!.id && req.actor!.role !== "ADMIN")) {
+    if (!row || (row.userId !== req.actor!.id && req.actor!.role !== "COSTING_DEPARTMENT")) {
       throw new ApiError(404, "Draft calculation not found.");
     }
     if (row.status === "COMPLETED") {
@@ -382,12 +381,12 @@ calculationRoutes.delete(
     });
     if (!row) throw new ApiError(404, "Calculation not found.");
     const canDelete =
-      req.actor!.role === "ADMIN" ||
+      req.actor!.role === "COSTING_DEPARTMENT" ||
       (row.userId === req.actor!.id && row.status === "DRAFT");
     if (!canDelete) {
       throw new ApiError(
         403,
-        "Only admins can delete completed calculations. You can only delete your own drafts."
+        "Only costing department can delete completed calculations. You can only delete your own drafts."
       );
     }
     await prisma.calculation.update({

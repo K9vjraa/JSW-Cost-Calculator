@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 5173,
-      strictPort: true,
+      strictPort: false,
       proxy: {
         // Proxy /api/* to backend in dev to avoid CORS issues
         '/api': {
@@ -85,7 +85,7 @@ export default defineConfig(({ mode }) => {
     preview: {
       host: '0.0.0.0',
       port: 4173,
-      strictPort: true
+      strictPort: false
     },
 
     // ── Compile-time constants ─────────────────────────────────────────────────

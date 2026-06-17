@@ -4,7 +4,6 @@ import {
   LockKeyhole, 
   Plus, 
   ShieldAlert, 
-  Truck, 
   Users,
   RefreshCw,
   Layers,
@@ -40,18 +39,34 @@ import { api, getOrFixture } from "@/services/api";
 import { useUsers } from "@/hooks/useQuery";
 import { EnterpriseDataTable, type EnterpriseColumnDef } from "@/components/EnterpriseDataTable";
 import { useTableQuery } from "@/hooks/useTableQuery";
+import { useERPConnection } from "@/hooks/useERPConnection";
 import { useAuth, useAuthStore } from "../store/auth";
 import { useUIStore } from "../store/uiStore";
 import { useSettingsStore } from "../store/settingsStore";
 
 // Reusable Page Header
 function PageHead({ title, icon: Icon }: { title: string; icon: typeof LockKeyhole }) {
-  return <header className="flex items-center gap-3"><span className="grid size-11 place-items-center rounded-lg bg-[#e8f0fb] text-[var(--primary)]"><Icon /></span><div><p className="text-sm font-semibold text-[var(--primary)]">MCMS Core + JSW Steel ERP</p><h2 className="text-2xl font-bold">{title}</h2></div></header>;
+  return (
+    <header className="flex items-center gap-3">
+      <span className="grid size-9 place-items-center rounded border border-slate-200 bg-slate-50 text-slate-600">
+        <Icon className="size-4" />
+      </span>
+      <div>
+        <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">MCMS Core + JSW Steel ERP</p>
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight">{title}</h2>
+      </div>
+    </header>
+  );
 }
 
 // Reusable Box Card
 function Box({ title, value }: { title: string; value: string }) {
-  return <Card><CardContent className="p-4"><p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">{title}</p><strong className="mt-2 block text-xl">{value}</strong></CardContent></Card>;
+  return (
+    <Card className="rounded-md border border-[#e5e7eb] bg-white p-4">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{title}</p>
+      <strong className="mt-1 block text-lg font-semibold text-slate-950 tracking-tight">{value}</strong>
+    </Card>
+  );
 }
 
 type TableApiResponse<T> = {
@@ -59,7 +74,9 @@ type TableApiResponse<T> = {
   pagination?: { page: number; limit: number; total: number; pages: number };
 };
 
-export function MastersPage({ focus = "metals" }: { focus?: "metals" | "suppliers" | "users" | "settings" }) {
+export function MastersPage({ focus = "material-master" }: { focus?: "metals" | "users" | "user-management" | "settings" | "material-master" | "material-rates" | "grade-builder" }) {
+  const { actor } = useAuth();
+  const { isConnected, isReconnecting, refetch } = useERPConnection();
   const [query, setQuery] = useState("");
   const metalTable = useTableQuery({ sortBy: "name", sortDir: "asc" });
   const gradeTable = useTableQuery({ sortBy: "name", sortDir: "asc" });
@@ -70,7 +87,6 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
   const [rawMaterials, setRawMaterials] = useState<any[]>([]);
   const [priceHistory, setPriceHistory] = useState<any[]>([]);
   const [alloys, setAlloys] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
 
   // Modal control state
   const [activeModal, setActiveModal] = useState<"metal" | "grade" | "raw" | "price" | "alloy" | null>(null);
@@ -100,7 +116,6 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
   // Price Master Form States
   const [priceType, setPriceType] = useState<"metal" | "raw">("metal");
   const [priceTargetId, setPriceTargetId] = useState("");
-  const [priceSupplierId, setPriceSupplierId] = useState("");
   const [priceValue, setPriceValue] = useState("");
   const [priceSource, setPriceSource] = useState("JSW Procurement Desk");
   const [priceReason, setPriceReason] = useState("Market Index Alignment");
@@ -121,21 +136,16 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
       const rawRes = await getOrFixture<{ data: any[] }>("/masters/raw-materials?limit=100", { data: rawMaterialsFixture });
       const historyRes = await getOrFixture<{ data: any[] }>("/masters/price-history?limit=100", { data: [] });
       const alloysRes = await getOrFixture<{ data: any[] }>("/masters/alloys?limit=100", { data: [] });
-      const suppliersRes = await getOrFixture<{ data: any[] }>("/masters/suppliers?limit=100", { data: [] });
 
       setMetals(metalsRes.data || []);
       setGrades(gradesRes.data || []);
       setRawMaterials(rawRes.data || []);
       setPriceHistory(historyRes.data || []);
       setAlloys(alloysRes.data || []);
-      setSuppliers(suppliersRes.data || []);
 
       if (metalsRes.data && metalsRes.data.length > 0) {
         setGradeMetalId(metalsRes.data[0].id);
         setPriceTargetId(metalsRes.data[0].id);
-      }
-      if (suppliersRes.data && suppliersRes.data.length > 0) {
-        setPriceSupplierId(suppliersRes.data[0].id);
       }
     } catch (err) {
       console.error("Failed to load ERP master data", err);
@@ -335,7 +345,7 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
       await api.post("/masters/prices", {
         metalId: priceType === "metal" ? priceTargetId : null,
         rawMaterialId: priceType === "raw" ? priceTargetId : null,
-        supplierId: priceSupplierId || null,
+        supplierId: null,
         pricePerUnit: parseFloat(priceValue),
         currency: "INR",
         unit: "kg",
@@ -425,60 +435,216 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
 
   return (
     <div className="flex flex-col gap-4">
+      {!isConnected && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border border-red-200 bg-red-50/70 backdrop-blur-xs text-red-900 rounded-lg p-3.5 text-xs font-semibold shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <span className="relative flex size-2 shrink-0">
+              <span className={`absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 ${isReconnecting ? 'animate-ping' : ''}`} />
+              <span className="relative inline-flex rounded-full size-2 bg-red-600" />
+            </span>
+            <span>
+              {isReconnecting ? (
+                <span className="flex items-center gap-1.5">
+                  <RefreshCw className="size-3 animate-spin" />
+                  ERP Connection Lost. Reconnecting to JSW costing server...
+                </span>
+              ) : (
+                "ERP Network Disconnected: Unable to reach costing server. Operating in offline fallback mode."
+              )}
+            </span>
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => refetch()} 
+            disabled={isReconnecting}
+            className="border-red-300 hover:bg-red-100 hover:text-red-900 bg-white shadow-xs shrink-0 cursor-pointer h-7 text-[10px] py-1"
+          >
+            {isReconnecting ? "Connecting..." : "Reconnect Now"}
+          </Button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHead 
-          title={focus === "suppliers" ? "Supplier Price Sheets" : focus === "users" ? "Users & Roles Access" : focus === "settings" ? "ERP Calculation Slabs" : "JSW Master Data Management"} 
-          icon={focus === "suppliers" ? Truck : focus === "users" ? Users : Database} 
+          title={
+            focus === "users" || focus === "user-management"
+              ? "Users & Roles Access" 
+              : focus === "settings" 
+              ? "ERP Calculation Slabs" 
+              : focus === "material-master"
+              ? "Material Master"
+              : focus === "material-rates"
+              ? "Material Rates"
+              : focus === "grade-builder"
+              ? "Grade Builder"
+              : "JSW Master Data Management"
+          } 
+          icon={focus === "users" || focus === "user-management" ? Users : Database} 
         />
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={refreshData}>
             <RefreshCw className="mr-1 size-4" /> Sync Database
           </Button>
-          {!["suppliers", "users", "settings"].includes(focus) && (
+          {actor?.role !== "PDQC" && (
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => {
-                // Determine which modal to trigger first
-                setActiveModal("price");
-              }} className="bg-[#0b5cbf]">
-                <TrendingUp className="mr-1 size-4" /> Price Adjuster
-              </Button>
-              <Button size="sm" onClick={() => {
-                setActiveModal("alloy");
-              }} className="bg-[#087443] hover:bg-[#065a33]">
-                <Layers className="mr-1 size-4" /> New Composition
-              </Button>
+              {focus === "material-rates" && (
+                <Button size="sm" onClick={() => setActiveModal("price")} className="bg-[#0b5cbf]">
+                  <TrendingUp className="mr-1 size-4" /> Price Adjuster
+                </Button>
+              )}
+              {focus === "material-master" && (
+                <Button size="sm" onClick={() => setActiveModal("alloy")} className="bg-[#087443] hover:bg-[#065a33]">
+                  <Layers className="mr-1 size-4" /> New Composition
+                </Button>
+              )}
             </div>
           )}
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Input 
-          className="max-w-sm" 
-          value={query} 
-          onChange={(event) => setQuery(event.target.value)} 
-          placeholder="Filter ERP lists..." 
-        />
-        <div className="flex gap-1">
-          <Button size="sm" variant="outline" onClick={() => setActiveModal("metal")}><Plus className="size-3" /> Add Metal</Button>
-          <Button size="sm" variant="outline" onClick={() => setActiveModal("grade")}><Plus className="size-3" /> Add Grade</Button>
-          <Button size="sm" variant="outline" onClick={() => setActiveModal("raw")}><Plus className="size-3" /> Add Raw Feed</Button>
+      {!["settings", "users", "user-management"].includes(focus) && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Input 
+            className="max-w-sm" 
+            value={query} 
+            onChange={(event) => setQuery(event.target.value)} 
+            placeholder="Filter ERP lists..." 
+          />
+          {actor?.role !== "PDQC" && (
+            <div className="flex gap-1">
+              {focus === "material-master" && (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => setActiveModal("metal")}><Plus className="size-3" /> Add Metal</Button>
+                  <Button size="sm" variant="outline" onClick={() => setActiveModal("raw")}><Plus className="size-3" /> Add Raw Feed</Button>
+                </>
+              )}
+              {focus === "grade-builder" && (
+                <Button size="sm" variant="outline" onClick={() => setActiveModal("grade")}><Plus className="size-3" /> Add Grade</Button>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      {focus === "users" ? (
+      {focus === "users" || focus === "user-management" ? (
         <UsersPanel />
       ) : focus === "settings" ? (
         <SettingsPanel />
-      ) : focus === "suppliers" ? (
-        <SuppliersPanel />
+      ) : focus === "grade-builder" ? (
+        <EnterpriseDataTable
+          tableId="grades"
+          data={gradesTableQuery.data?.data ?? []}
+          columns={gradeColumns}
+          query={gradeTable.query}
+          onQueryChange={gradeTable.setQuery}
+          totalRows={gradesTableQuery.data?.pagination?.total ?? 0}
+          getRowId={(row) => row.id}
+          isLoading={gradesTableQuery.isLoading}
+          error={gradesTableQuery.error}
+          searchPlaceholder="Search grade or subgrade..."
+          exportResource="grades"
+          exportParams={gradeTable.params}
+          filters={
+            <>
+              <select
+                value={gradeTable.query.filters.metalId ?? ""}
+                onChange={(event) => gradeTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, metalId: event.target.value || undefined } }))}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+              >
+                <option value="">All Metals</option>
+                {metals.map((metal) => <option key={metal.id} value={metal.id}>{metal.name}</option>)}
+              </select>
+              <select
+                value={gradeTable.query.filters.status ?? ""}
+                onChange={(event) => gradeTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+              >
+                <option value="">All Statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </>
+          }
+        />
+      ) : focus === "material-rates" ? (
+        <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
+          <Card>
+            <CardHeader className="bg-[#fafbfd] border-b py-3 px-4">
+              <CardTitle className="text-base flex items-center gap-2"><DollarSign className="size-4 text-[#0b5cbf]" /> Active Locked Prices</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-y-auto max-h-[500px] p-0">
+              <Table>
+                <thead>
+                  <tr className="bg-[#f8fafc] border-b text-xs">
+                    <TableHead>Feed Material</TableHead>
+                    <TableHead>Current Master Price</TableHead>
+                    <TableHead>Source Desk</TableHead>
+                    <TableHead>Effective Date</TableHead>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...metals, ...rawMaterials].map((item, index) => {
+                    const priceRow = item.prices && item.prices[0];
+                    if (!priceRow) return null;
+                    return (
+                      <tr key={`${item.id}-${index}`} className="border-b text-sm">
+                        <TableCell className="font-semibold">{item.name}</TableCell>
+                        <TableCell className="font-mono text-[#087443] font-semibold">{inr(priceRow.pricePerUnit)} / kg</TableCell>
+                        <TableCell className="text-xs">{priceRow.source}</TableCell>
+                        <TableCell className="text-xs">{shortDate(priceRow.effectiveFrom)}</TableCell>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="bg-[#fafbfd] border-b py-3 px-4">
+              <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="size-4 text-[#087443]" /> ERP Master Price History Logs</CardTitle>
+            </CardHeader>
+            <CardContent className="overflow-y-auto max-h-[500px] p-0">
+              <Table>
+                <thead>
+                  <tr className="bg-[#f8fafc] border-b text-xs">
+                    <TableHead>Material</TableHead>
+                    <TableHead>Old Rate</TableHead>
+                    <TableHead>New Rate</TableHead>
+                    <TableHead>Adjuster</TableHead>
+                    <TableHead>Reason / Event</TableHead>
+                    <TableHead>Time</TableHead>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priceHistory.length > 0 ? (
+                    priceHistory.map((hist) => (
+                      <tr key={hist.id} className="border-b text-xs">
+                        <TableCell className="font-semibold">{hist.metal?.name || hist.rawMaterial?.name}</TableCell>
+                        <TableCell className="font-mono text-slate-400">{hist.oldPrice ? `${inr(hist.oldPrice)}` : "None"}</TableCell>
+                        <TableCell className="font-mono text-[#0b5cbf] font-semibold">{inr(hist.newPrice)}</TableCell>
+                        <TableCell>{hist.updatedBy?.name || "System"}</TableCell>
+                        <TableCell className="text-slate-500 max-w-[150px] truncate" title={hist.reason || ""}>{hist.reason || "Periodic Lock"}</TableCell>
+                        <TableCell className="text-slate-400">{shortDate(hist.updatedAt)}</TableCell>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <TableCell colSpan={6} className="text-center py-8 text-slate-400">
+                        No price update logs found. Use the Price Adjuster to publish a price.
+                      </TableCell>
+                    </tr>
+                  )}
+                </tbody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
       ) : (
         <Tabs defaultValue="metals">
           <TabsList className="bg-[#eef2f6]">
             <TabsTrigger value="metals" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Metals Master</TabsTrigger>
-            <TabsTrigger value="grades" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Steel Grades & Subgrades</TabsTrigger>
             <TabsTrigger value="raw" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Raw Materials Feed</TabsTrigger>
-            <TabsTrigger value="prices" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Price History Logs</TabsTrigger>
             <TabsTrigger value="alloys" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Product Compositions</TabsTrigger>
           </TabsList>
 
@@ -511,44 +677,6 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
                   <select
                     value={metalTable.query.filters.status ?? ""}
                     onChange={(event) => metalTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
-                  >
-                    <option value="">All Statuses</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="INACTIVE">Inactive</option>
-                  </select>
-                </>
-              }
-            />
-          </TabsContent>
-
-          <TabsContent value="grades" className="mt-2">
-            <EnterpriseDataTable
-              tableId="grades"
-              data={gradesTableQuery.data?.data ?? []}
-              columns={gradeColumns}
-              query={gradeTable.query}
-              onQueryChange={gradeTable.setQuery}
-              totalRows={gradesTableQuery.data?.pagination?.total ?? 0}
-              getRowId={(row) => row.id}
-              isLoading={gradesTableQuery.isLoading}
-              error={gradesTableQuery.error}
-              searchPlaceholder="Search grade or subgrade..."
-              exportResource="grades"
-              exportParams={gradeTable.params}
-              filters={
-                <>
-                  <select
-                    value={gradeTable.query.filters.metalId ?? ""}
-                    onChange={(event) => gradeTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, metalId: event.target.value || undefined } }))}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
-                  >
-                    <option value="">All Metals</option>
-                    {metals.map((metal) => <option key={metal.id} value={metal.id}>{metal.name}</option>)}
-                  </select>
-                  <select
-                    value={gradeTable.query.filters.status ?? ""}
-                    onChange={(event) => gradeTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
                     className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
                   >
                     <option value="">All Statuses</option>
@@ -597,82 +725,6 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
             </Card>
           </TabsContent>
 
-          <TabsContent value="prices" className="mt-2">
-            <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
-              <Card>
-                <CardHeader className="bg-[#fafbfd] border-b py-3 px-4">
-                  <CardTitle className="text-base flex items-center gap-2"><DollarSign className="size-4 text-[#0b5cbf]" /> Active Locked Prices</CardTitle>
-                </CardHeader>
-                <CardContent className="overflow-y-auto max-h-[400px] p-0">
-                  <Table>
-                    <thead>
-                      <tr className="bg-[#f8fafc] border-b text-xs">
-                        <TableHead>Feed Material</TableHead>
-                        <TableHead>Current Master Price</TableHead>
-                        <TableHead>Source Desk</TableHead>
-                        <TableHead>Effective Date</TableHead>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...metals, ...rawMaterials].map((item, index) => {
-                        const priceRow = item.prices && item.prices[0];
-                        if (!priceRow) return null;
-                        return (
-                          <tr key={`${item.id}-${index}`} className="border-b text-sm">
-                            <TableCell className="font-semibold">{item.name}</TableCell>
-                            <TableCell className="font-mono text-[#087443] font-semibold">{inr(priceRow.pricePerUnit)} / kg</TableCell>
-                            <TableCell className="text-xs">{priceRow.source}</TableCell>
-                            <TableCell className="text-xs">{shortDate(priceRow.effectiveFrom)}</TableCell>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </Table>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="bg-[#fafbfd] border-b py-3 px-4">
-                  <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="size-4 text-[#087443]" /> ERP Master Price History Logs</CardTitle>
-                </CardHeader>
-                <CardContent className="overflow-y-auto max-h-[400px] p-0">
-                  <Table>
-                    <thead>
-                      <tr className="bg-[#f8fafc] border-b text-xs">
-                        <TableHead>Material</TableHead>
-                        <TableHead>Old Rate</TableHead>
-                        <TableHead>New Rate</TableHead>
-                        <TableHead>Adjuster</TableHead>
-                        <TableHead>Reason / Event</TableHead>
-                        <TableHead>Time</TableHead>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {priceHistory.length > 0 ? (
-                        priceHistory.map((hist) => (
-                          <tr key={hist.id} className="border-b text-xs">
-                            <TableCell className="font-semibold">{hist.metal?.name || hist.rawMaterial?.name}</TableCell>
-                            <TableCell className="font-mono text-slate-400">{hist.oldPrice ? `${inr(hist.oldPrice)}` : "None"}</TableCell>
-                            <TableCell className="font-mono text-[#0b5cbf] font-semibold">{inr(hist.newPrice)}</TableCell>
-                            <TableCell>{hist.updatedBy?.name || "System"}</TableCell>
-                            <TableCell className="text-slate-500 max-w-[150px] truncate" title={hist.reason || ""}>{hist.reason || "Periodic Lock"}</TableCell>
-                            <TableCell className="text-slate-400">{shortDate(hist.updatedAt)}</TableCell>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <TableCell colSpan={6} className="text-center py-8 text-slate-400">
-                            No price update logs found. Use the Price Adjuster to publish a price.
-                          </TableCell>
-                        </tr>
-                      )}
-                    </tbody>
-                  </Table>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
           <TabsContent value="alloys" className="mt-2">
             <Card>
               <CardContent className="overflow-x-auto p-0">
@@ -718,204 +770,218 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
         </Tabs>
       )}
 
-      {/* MODALS */}
-      {/* 1. Metal Master Modal */}
+      {/* MODALS / DRAWERS */}
+      {/* 1. Metal Master Drawer */}
       {activeModal === "metal" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-md rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#032f67] p-4 text-white">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Database className="size-5" /> Add Metal Master Line</h3>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Database className="size-4" /> Add Metal Master
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <form onSubmit={handleAddMetal} className="p-5 flex flex-col gap-4">
-              <label className="grid gap-1 text-sm font-semibold">Metal Name
+            <form onSubmit={handleAddMetal} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Metal Name
                 <Input required value={metalName} onChange={e => setMetalName(e.target.value)} placeholder="e.g. Copper Feed" />
               </label>
-              <label className="grid gap-1 text-sm font-semibold">ERP Unique Code
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">ERP Unique Code
                 <Input required value={metalCode} onChange={e => setMetalCode(e.target.value.toUpperCase())} placeholder="e.g. MTL-CU" />
               </label>
-              <label className="grid gap-1 text-sm font-semibold">Category
-                <select className="h-10 rounded-md border bg-white px-2 text-sm" value={metalCategory} onChange={e => setMetalCategory(e.target.value)}>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Category
+                <select className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium" value={metalCategory} onChange={e => setMetalCategory(e.target.value)}>
                   <option value="Ferrous">Ferrous</option>
                   <option value="Non-Ferrous">Non-Ferrous</option>
                   <option value="Alloy">Alloy Base</option>
                   <option value="Noble">Noble Metal</option>
                 </select>
               </label>
-              <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#032f67]">Save Record</Button>
+                <Button type="submit" className="bg-[#002652]">Save Record</Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* 2. Grade Modal */}
+      {/* 2. Grade Drawer */}
       {activeModal === "grade" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-lg rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#032f67] p-4 text-white">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Layers className="size-5" /> Add Steel Grade & Subgrade</h3>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Layers className="size-4" /> Add Steel Grade & Subgrade
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <form onSubmit={handleAddGrade} className="p-5 flex flex-col gap-3.5 text-sm max-h-[85vh] overflow-y-auto">
-              <label className="grid gap-1 font-semibold">Metal Master Base
-                <select className="h-10 rounded-md border bg-white px-2" value={gradeMetalId} onChange={e => setGradeMetalId(e.target.value)}>
+            <form onSubmit={handleAddGrade} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Metal Master Base
+                <select className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium" value={gradeMetalId} onChange={e => setGradeMetalId(e.target.value)}>
                   {metals.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 font-semibold">Grade Name
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Grade Name
                   <Input required value={gradeName} onChange={e => setGradeName(e.target.value)} placeholder="e.g. SS309" />
                 </label>
-                <label className="grid gap-1 font-semibold">Subgrade (Optional)
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Subgrade (Optional)
                   <Input value={gradeSub} onChange={e => setGradeSub(e.target.value)} placeholder="e.g. L" />
                 </label>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 font-semibold">Price Multiplier
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Price Multiplier
                   <Input required type="number" step="0.001" value={gradeMultiplier} onChange={e => setGradeMultiplier(e.target.value)} />
                 </label>
-                <label className="grid gap-1 font-semibold">Extra Process Cost (INR/kg)
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Extra Process Cost (INR/kg)
                   <Input required type="number" step="0.01" value={gradeExtraPrice} onChange={e => setGradeExtraPrice(e.target.value)} />
                 </label>
               </div>
               <div className="border-t pt-3 mt-1">
-                <h4 className="font-bold text-slate-800 mb-2">Chemical Composition Profile (%)</h4>
+                <h4 className="text-xs font-semibold text-slate-800 mb-2">Chemical Composition Profile (%)</h4>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  <label className="grid gap-1 font-medium text-xs">Chromium (Cr)
-                    <Input value={chemCr} onChange={e => setChemCr(e.target.value)} placeholder="e.g. 19.5%" />
+                  <label className="grid gap-1 text-[10px] font-medium text-slate-500">Chromium (Cr)
+                    <Input value={chemCr} onChange={e => setChemCr(e.target.value)} placeholder="e.g. 19.5%" className="h-8.5" />
                   </label>
-                  <label className="grid gap-1 font-medium text-xs">Nickel (Ni)
-                    <Input value={chemNi} onChange={e => setChemNi(e.target.value)} placeholder="e.g. 9.0%" />
+                  <label className="grid gap-1 text-[10px] font-medium text-slate-500">Nickel (Ni)
+                    <Input value={chemNi} onChange={e => setChemNi(e.target.value)} placeholder="e.g. 9.0%" className="h-8.5" />
                   </label>
-                  <label className="grid gap-1 font-medium text-xs">Carbon (C)
-                    <Input value={chemC} onChange={e => setChemC(e.target.value)} placeholder="e.g. 0.05%" />
+                  <label className="grid gap-1 text-[10px] font-medium text-slate-500">Carbon (C)
+                    <Input value={chemC} onChange={e => setChemC(e.target.value)} placeholder="e.g. 0.05%" className="h-8.5" />
                   </label>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#032f67]">Add Grade</Button>
+                <Button type="submit" className="bg-[#002652]">Add Grade</Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* 3. Raw Material Feed Modal */}
+      {/* 3. Raw Material Feed Drawer */}
       {activeModal === "raw" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-md rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#032f67] p-4 text-white">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Database className="size-5" /> Add Raw Mineral Feed</h3>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Database className="size-4" /> Add Raw Mineral Feed
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <form onSubmit={handleAddRaw} className="p-5 flex flex-col gap-4">
-              <label className="grid gap-1 text-sm font-semibold">Raw Material Name
+            <form onSubmit={handleAddRaw} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Raw Material Name
                 <Input required value={rawName} onChange={e => setRawName(e.target.value)} placeholder="e.g. Manganese Ore" />
               </label>
-              <label className="grid gap-1 text-sm font-semibold">ERP Unique Code
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">ERP Unique Code
                 <Input required value={rawCode} onChange={e => setRawCode(e.target.value.toUpperCase())} placeholder="e.g. RM-MN" />
               </label>
-              <label className="grid gap-1 text-sm font-semibold">Base Unit
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Base Unit
                 <Input required value={rawUnit} onChange={e => setRawUnit(e.target.value)} />
               </label>
-              <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#032f67]">Save Material</Button>
+                <Button type="submit" className="bg-[#002652]">Save Material</Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* 4. Price Master Publish Modal */}
+      {/* 4. Price Master Publish Drawer */}
       {activeModal === "price" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-md rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#032f67] p-4 text-white">
-              <h3 className="text-lg font-bold flex items-center gap-2"><DollarSign className="size-5" /> Publish Master Price</h3>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <DollarSign className="size-4" /> Publish Master Price
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <form onSubmit={handlePublishPrice} className="p-5 flex flex-col gap-3.5 text-sm">
-              <div className="grid grid-cols-2 gap-2 p-1 border rounded-lg bg-slate-50">
-                <button type="button" onClick={() => { setPriceType("metal"); setPriceTargetId(metals[0]?.id || ""); }} className={`py-1.5 rounded-md font-semibold text-center text-xs ${priceType === "metal" ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500"}`}>Metals</button>
-                <button type="button" onClick={() => { setPriceType("raw"); setPriceTargetId(rawMaterials[0]?.id || ""); }} className={`py-1.5 rounded-md font-semibold text-center text-xs ${priceType === "raw" ? "bg-white text-slate-800 shadow-sm border border-slate-200" : "text-slate-500"}`}>Raw Mineral Feeds</button>
+            <form onSubmit={handlePublishPrice} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2 p-1 border rounded bg-slate-50 border-slate-200">
+                <button type="button" onClick={() => { setPriceType("metal"); setPriceTargetId(metals[0]?.id || ""); }} className={`py-1 rounded font-semibold text-center text-[10px] uppercase ${priceType === "metal" ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500"}`}>Metals</button>
+                <button type="button" onClick={() => { setPriceType("raw"); setPriceTargetId(rawMaterials[0]?.id || ""); }} className={`py-1 rounded font-semibold text-center text-[10px] uppercase ${priceType === "raw" ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500"}`}>Raw Feeds</button>
               </div>
-              <label className="grid gap-1 font-semibold">Target Feed Material
-                <select className="h-10 rounded-md border bg-white px-2" value={priceTargetId} onChange={e => setPriceTargetId(e.target.value)}>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Target Feed Material
+                <select className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium" value={priceTargetId} onChange={e => setPriceTargetId(e.target.value)}>
                   {priceType === "metal" 
                     ? metals.map(m => <option key={m.id} value={m.id}>{m.name} ({m.code})</option>)
                     : rawMaterials.map(r => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)
                   }
                 </select>
               </label>
-              <label className="grid gap-1 font-semibold">Linked Supplier Desk
-                <select className="h-10 rounded-md border bg-white px-2" value={priceSupplierId} onChange={e => setPriceSupplierId(e.target.value)}>
-                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  <option value="">JSW Approved Supplier Desk</option>
-                </select>
-              </label>
-              <label className="grid gap-1 font-semibold">New Locked Price (INR/kg)
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">New Locked Price (INR/kg)
                 <Input required type="number" step="0.0001" value={priceValue} onChange={e => setPriceValue(e.target.value)} placeholder="e.g. 78.50" />
               </label>
-              <label className="grid gap-1 font-semibold">Price Source Desk
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Price Source Desk
                 <Input value={priceSource} onChange={e => setPriceSource(e.target.value)} />
               </label>
-              <label className="grid gap-1 font-semibold">Reason for price update
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Reason for price update
                 <Input value={priceReason} onChange={e => setPriceReason(e.target.value)} placeholder="e.g. Quarterly Contract Update" />
               </label>
-              <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#0b5cbf]">Publish Lock</Button>
+                <Button type="submit" className="bg-[#002652]">Publish Lock</Button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* 5. JSW Steel Alloy Composition Modal */}
+      {/* 5. JSW Steel Alloy Composition Drawer */}
       {activeModal === "alloy" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-2xl rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#087443] p-4 text-white">
-              <h3 className="text-lg font-bold flex items-center gap-2"><Layers className="size-5" /> JSW Steel Composition Structure</h3>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-lg bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Layers className="size-4" /> JSW Steel Composition Structure
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <form onSubmit={handleAddAlloy} className="p-5 flex flex-col gap-4 text-sm max-h-[85vh] overflow-y-auto">
+            <form onSubmit={handleAddAlloy} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 font-semibold">Composition Name
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Composition Name
                   <Input required value={alloyName} onChange={e => setAlloyName(e.target.value)} placeholder="e.g. SS304 Batch Alloy" />
                 </label>
-                <label className="grid gap-1 font-semibold">ERP Unique Code
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">ERP Unique Code
                   <Input required value={alloyCode} onChange={e => setAlloyCode(e.target.value.toUpperCase())} placeholder="e.g. ALY-SS304-JSW" />
                 </label>
               </div>
-              <label className="grid gap-1 font-semibold">Steel Type
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Steel Type
                 <Input value={alloyType} onChange={e => setAlloyType(e.target.value)} placeholder="e.g. Stainless Steel" />
               </label>
 
-              <div className="border-t pt-3 mt-2">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Sliders className="size-4 text-[#087443]" /> Raw Mineral & Composition Feeds
+              <div className="border-t border-slate-100 pt-3">
+                <div className="flex justify-between items-center mb-2.5">
+                  <h4 className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                    <Sliders className="size-4 text-slate-500" /> Component Breakdown
                   </h4>
-                  <Button type="button" variant="outline" size="sm" onClick={addAlloyCompRow}>
-                    <Plus className="mr-1 size-3.5" /> Add Component
+                  <Button type="button" variant="outline" size="sm" onClick={addAlloyCompRow} className="h-7 text-[10px] font-semibold">
+                    <Plus className="mr-1 size-3" /> Add Component
                   </Button>
                 </div>
 
-                <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto border rounded-lg p-2.5 bg-slate-50/50">
+                <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto border border-slate-200 rounded p-2 bg-slate-50/50">
                   {alloyComponents.map((row, index) => (
-                    <div key={index} className="flex gap-2 items-center bg-white p-2 border rounded-md shadow-sm">
+                    <div key={index} className="flex gap-2 items-center bg-white p-2 border border-slate-200 rounded">
                       <select 
-                        className="h-9 rounded border text-xs px-1 bg-slate-50 w-28" 
+                        className="h-8 rounded border text-xs px-1 bg-slate-50 w-24" 
                         value={row.type} 
                         onChange={e => updateAlloyCompRow(index, { type: e.target.value as "metal" | "raw", id: "" })}
                       >
-                        <option value="metal">Metal / Grade</option>
+                        <option value="metal">Metal/Grade</option>
                         <option value="raw">Raw Mineral</option>
                       </select>
 
                       <select 
-                        className="h-9 rounded border text-xs px-2 flex-1"
+                        className="h-8 rounded border text-xs px-2 flex-1 w-0 min-w-0"
                         required
                         value={row.id}
                         onChange={e => updateAlloyCompRow(index, { id: e.target.value })}
@@ -927,20 +993,20 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
                         }
                       </select>
 
-                      <div className="flex items-center gap-1 w-20">
+                      <div className="flex items-center gap-1 w-16 shrink-0">
                         <Input 
                           type="number" 
                           required 
-                          className="h-9 text-xs" 
+                          className="h-8 text-xs px-1.5" 
                           placeholder="%" 
                           value={row.pct || ""} 
                           onChange={e => updateAlloyCompRow(index, { pct: parseFloat(e.target.value) || 0 })} 
                         />
-                        <span className="text-xs text-slate-500">%</span>
+                        <span className="text-[10px] text-slate-500 font-semibold">%</span>
                       </div>
 
                       {alloyComponents.length > 1 && (
-                        <button type="button" onClick={() => removeAlloyCompRow(index)} className="text-slate-400 hover:text-red-500 p-1">
+                        <button type="button" onClick={() => removeAlloyCompRow(index)} className="text-slate-400 hover:text-red-500 p-1 shrink-0">
                           <Trash2 className="size-4" />
                         </button>
                       )}
@@ -949,25 +1015,23 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
                 </div>
 
                 {/* COMPOSITION SUM VALIDATOR */}
-                <div className="mt-3 flex items-center justify-between p-3 rounded-lg border bg-slate-50 text-xs">
-                  <span className="font-semibold text-slate-700">Total Composition Structure Percentage:</span>
-                  <Badge className={`font-mono font-bold py-1 px-2.5 text-xs flex items-center gap-1 border ${
+                <div className="mt-3 flex items-center justify-between p-2.5 rounded border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-700">
+                  <span>Total Composition Sum:</span>
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${
                     alloyCompSum === 100 
-                      ? "bg-[#e8fbf0] text-[#087443] border-[#bde4cf]" 
-                      : alloyCompSum > 100 
-                        ? "bg-red-50 text-red-700 border-red-200 animate-pulse" 
-                        : "bg-amber-50 text-amber-700 border-amber-200"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                      : "bg-amber-50 text-amber-700 border-amber-200"
                   }`}>
                     {alloyCompSum === 100 ? <Check className="size-3.5" /> : <AlertCircle className="size-3.5" />}
-                    {alloyCompSum}% {alloyCompSum === 100 ? "(Valid JSW Structure)" : alloyCompSum > 100 ? "(Exceeds 100%)" : "(Incomplete)"}
-                  </Badge>
+                    {alloyCompSum}% {alloyCompSum === 100 ? "(Valid)" : "(Invalid)"}
+                  </span>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 border-t pt-4 mt-2">
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#087443] text-white hover:bg-[#065a33]" disabled={alloyCompSum !== 100}>
-                  Validate & Save Structure
+                <Button type="submit" className="bg-[#002652]" disabled={alloyCompSum !== 100}>
+                  Save Structure
                 </Button>
               </div>
             </form>
@@ -978,25 +1042,106 @@ export function MastersPage({ focus = "metals" }: { focus?: "metals" | "supplier
   );
 }
 
-// Existing fallback subpanels
-function SuppliersPanel() {
-  return <div className="grid gap-4 xl:grid-cols-[1.2fr_.8fr]"><GridTable columns={["Supplier", "Code", "Linked Price Sheet", "Status"]} rows={[{ name: "JSW Approved Supply Desk", source: "SUP-JSW-01", value: "7 price lines", extra: "Active" }, { name: "Tata Alloy Quotes", source: "SUP-TA-04", value: "CSV ready", extra: "Review" }]} /><Card><CardHeader><CardTitle>Supplier Price Sheets</CardTitle></CardHeader><CardContent className="flex flex-col gap-2 text-sm"><p>Contact details and linked metal prices stay separate from current master prices until Admin activates a price row.</p><Button variant="outline"><Download />CSV Import / Export</Button></CardContent></Card></div>;
-}
 function UsersPanel() {
+  const { actor } = useAuth();
+  const isCostingDept = actor?.role === "COSTING_DEPARTMENT";
   const usersTable = useTableQuery({ sortBy: "createdAt", sortDir: "desc" });
   const usersQuery = useQuery({
     queryKey: ["enterprise-table", "users", usersTable.queryKey],
     queryFn: async () => {
-      const { data } = await api.get<TableApiResponse<any>>("/users", { params: usersTable.params });
+      const { data } = await api.get<any>("/users", { params: usersTable.params });
       return data;
     },
     placeholderData: (previous) => previous
   });
+
+  const [activeUserModal, setActiveUserModal] = useState<"create" | "edit" | null>(null);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+
+  // User form states
+  const [userName, setUserName] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userPassword, setUserPassword] = useState("");
+  const [userDept, setUserDept] = useState("");
+  const [userRoleId, setUserRoleId] = useState("");
+  const [userStatus, setUserStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+
+  // Populate form states when drawer opens
+  useEffect(() => {
+    if (activeUserModal === "edit" && selectedUser) {
+      setUserName(selectedUser.name || "");
+      setUserEmail(selectedUser.email || "");
+      setUserPassword(""); // Clear password field
+      setUserDept(selectedUser.department || "");
+      setUserRoleId(selectedUser.roleId || selectedUser.role?.id || "");
+      setUserStatus(selectedUser.status || "ACTIVE");
+    } else if (activeUserModal === "create") {
+      setUserName("");
+      setUserEmail("");
+      setUserPassword("");
+      setUserDept("");
+      setUserStatus("ACTIVE");
+      const defaultRole = usersQuery.data?.roles?.[0]?.id || "";
+      setUserRoleId(defaultRole);
+    }
+  }, [activeUserModal, selectedUser, usersQuery.data?.roles]);
+
+  const handleUserSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userName || !userEmail || (activeUserModal === "create" && !userPassword) || !userRoleId) {
+      toast.error("Please fill in all required fields.");
+      return;
+    }
+
+    try {
+      if (activeUserModal === "create") {
+        await api.post("/users", {
+          name: userName,
+          email: userEmail,
+          password: userPassword,
+          department: userDept || undefined,
+          roleId: userRoleId,
+          status: userStatus
+        });
+        toast.success(`User ${userName} created successfully.`);
+      } else {
+        const payload: any = {
+          name: userName,
+          email: userEmail,
+          department: userDept || undefined,
+          roleId: userRoleId,
+          status: userStatus
+        };
+        if (userPassword) {
+          payload.password = userPassword;
+        }
+        await api.put(`/users/${selectedUser.id}`, payload);
+        toast.success(`User ${userName} updated successfully.`);
+      }
+      setActiveUserModal(null);
+      usersQuery.refetch();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || `Failed to ${activeUserModal} user.`);
+    }
+  };
+
+  const handleDeactivateUser = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to deactivate user ${name}?`)) return;
+    try {
+      await api.delete(`/users/${id}`);
+      toast.success(`User ${name} deactivated successfully.`);
+      setActiveUserModal(null);
+      usersQuery.refetch();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to deactivate user.");
+    }
+  };
+
   const userColumns = useMemo<EnterpriseColumnDef<any>[]>(() => [
-    { accessorKey: "name", header: "User", meta: { label: "User" }, cell: ({ row }) => <span className="font-bold text-slate-800">{row.original.name}</span> },
+    { accessorKey: "name", header: "User", meta: { label: "User" }, cell: ({ row }) => <span className="font-semibold text-slate-800">{row.original.name}</span> },
     { accessorKey: "email", header: "Email", meta: { label: "Email", className: "font-mono text-[11px]" } },
     { accessorKey: "department", header: "Department", meta: { label: "Department" }, cell: ({ row }) => row.original.department || "Operations" },
-    { id: "role", header: "Role", enableSorting: false, meta: { label: "Role" }, cell: ({ row }) => row.original.role?.name || row.original.role || "USER" },
+    { id: "role", header: "Role", enableSorting: false, meta: { label: "Role" }, cell: ({ row }) => row.original.role?.name || row.original.role || "PDQC" },
     {
       accessorKey: "status",
       header: "Status",
@@ -1008,6 +1153,7 @@ function UsersPanel() {
       )
     }
   ], []);
+
   return (
     <div className="grid gap-4 xl:grid-cols-[1.3fr_.7fr]">
       <EnterpriseDataTable
@@ -1023,25 +1169,113 @@ function UsersPanel() {
         searchPlaceholder="Search users, email, or department..."
         exportResource="users"
         exportParams={usersTable.params}
+        onRowClick={(user) => {
+          if (isCostingDept) {
+            setSelectedUser(user);
+            setActiveUserModal("edit");
+          }
+        }}
         filters={
-          <select
-            value={usersTable.query.filters.status ?? ""}
-            onChange={(event) => usersTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
-          >
-            <option value="">All Statuses</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
+          <div className="flex gap-2 w-full justify-between items-center">
+            <select
+              value={usersTable.query.filters.status ?? ""}
+              onChange={(event) => usersTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
+              className="h-9 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs font-semibold text-slate-600 focus:outline-none"
+            >
+              <option value="">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="INACTIVE">Inactive</option>
+            </select>
+            {isCostingDept && (
+              <Button size="sm" onClick={() => setActiveUserModal("create")} className="bg-[#002652] hover:bg-[#001b3a] text-xs h-9">
+                <Plus className="mr-1 size-4" /> Add User
+              </Button>
+            )}
+          </div>
         }
       />
-      <Card>
-        <CardHeader><CardTitle>Role Access</CardTitle></CardHeader>
-        <CardContent className="flex flex-col gap-2">{["Admin: all modules", "Procurement: costing + supplier visibility", "Finance: review + reports + audit", "Production: costing + comparison"].map((line) => <div key={line} className="rounded-md border p-2 text-sm">{line}</div>)}</CardContent>
+      <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none">
+        <CardHeader className="p-4 border-b border-[#E5E7EB]"><CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">Role Access Levels</CardTitle></CardHeader>
+        <CardContent className="flex flex-col gap-2 p-4">
+          {[
+            { role: "COSTING_DEPARTMENT", desc: "Full read-write access to dashboard, master data, price adjusting, grade builder, comparison, reports, user management, audit logs, settings, and costing workspace." },
+            { role: "PDQC", desc: "Limited access to dashboard, costing workspace, and read-only view of steel grade parameters." }
+          ].map((item) => (
+            <div key={item.role} className="rounded-sm border border-[#E5E7EB] p-3 text-xs bg-slate-50/50">
+              <strong className="text-[#002652] font-semibold">{item.role}</strong>
+              <p className="text-slate-500 mt-1">{item.desc}</p>
+            </div>
+          ))}
+        </CardContent>
       </Card>
+
+      {/* User Edit/Create Drawer */}
+      {activeUserModal && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveUserModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-[#E5E7EB] p-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Users className="size-4" /> {activeUserModal === "create" ? "Add User Account" : "Edit User Account"}
+              </h3>
+              <button type="button" onClick={() => setActiveUserModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
+            </header>
+            <form onSubmit={handleUserSubmit} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Full Name
+                <Input required value={userName} onChange={e => setUserName(e.target.value)} placeholder="e.g. Rahul Sharma" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Email Address
+                <Input required type="email" value={userEmail} onChange={e => setUserEmail(e.target.value)} placeholder="e.g. rahul.s@jsw.in" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
+                Password {activeUserModal === "edit" && <span className="text-slate-400 font-normal">(Leave blank to keep current)</span>}
+                <Input required={activeUserModal === "create"} type="password" value={userPassword} onChange={e => setUserPassword(e.target.value)} placeholder={activeUserModal === "create" ? "At least 8 characters" : "Change user password"} className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Department (Optional)
+                <Input value={userDept} onChange={e => setUserDept(e.target.value)} placeholder="e.g. Finance, Procurement" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">System Role
+                <select 
+                  className="h-10 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-slate-400" 
+                  value={userRoleId} 
+                  onChange={e => setUserRoleId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>Select role...</option>
+                  {usersQuery.data?.roles?.map((r: any) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Status
+                <select 
+                  className="h-10 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs text-slate-700 font-medium focus:outline-none focus:border-slate-400" 
+                  value={userStatus} 
+                  onChange={e => setUserStatus(e.target.value as "ACTIVE" | "INACTIVE")}
+                >
+                  <option value="ACTIVE">Active</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
+              </label>
+              <div className="flex justify-between items-center border-t border-[#E5E7EB] pt-4 mt-auto">
+                {activeUserModal === "edit" ? (
+                  <Button type="button" variant="outline" onClick={() => handleDeactivateUser(selectedUser.id, userName)} className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 text-xs">
+                    Deactivate User
+                  </Button>
+                ) : <div />}
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setActiveUserModal(null)} className="text-xs">Cancel</Button>
+                  <Button type="submit" className="bg-[#002652] hover:bg-[#001b3a] text-xs">Save Account</Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 function SettingsPanel() {
   const { actor } = useAuth();
   const { erpTheme, setErpTheme } = useUIStore();
@@ -1054,7 +1288,7 @@ function SettingsPanel() {
   const updateProfile = useSettingsStore((state) => state.updateProfile);
   const isLoading = useSettingsStore((state) => state.isLoading);
 
-  const isAdmin = actor?.role === "ADMIN";
+  const isAdmin = actor?.role === "COSTING_DEPARTMENT";
 
   // Active sub-tab state
   const [activeTab, setActiveTab] = useState<"profile" | "gst" | "theme" | "system">("profile");
@@ -1225,8 +1459,8 @@ function SettingsPanel() {
   return (
     <div className="grid gap-5 xl:grid-cols-[0.25fr_1fr] text-left">
       {/* Side Tabs Selector */}
-      <Card className="border-slate-200 bg-white p-3 flex flex-col gap-1.5 h-fit shadow-xs">
-        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-2 mb-1.5">Settings Module</span>
+      <Card className="rounded-md border border-[#E5E7EB] bg-white p-3 flex flex-col gap-1 h-fit shadow-none">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 mb-2">Settings Module</span>
         {[
           { id: "profile" as const, label: "Profile Credentials" },
           { id: "gst" as const, label: "GST Slabs & Rates" },
@@ -1236,9 +1470,9 @@ function SettingsPanel() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`w-full py-2.5 px-3.5 text-left text-xs font-bold rounded-xl transition-all ${
+            className={`w-full py-2 px-3.5 text-left text-xs font-bold rounded-sm transition-all ${
               activeTab === tab.id
-                ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
+                ? "bg-[#F3F4F6] text-[#002652] border-l-2 border-[#002652]"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
             }`}
           >
@@ -1248,43 +1482,43 @@ function SettingsPanel() {
       </Card>
 
       {/* Main Form Tab Panels */}
-      <Card className="border-slate-200 bg-white p-6 shadow-xs min-h-[500px]">
+      <Card className="rounded-md border border-[#E5E7EB] bg-white p-6 shadow-none min-h-[500px]">
         {/* Tab 1: Profile Credentials */}
         {activeTab === "profile" && (
           <form onSubmit={handleProfileSave} className="flex flex-col gap-4 max-w-lg">
             <div>
-              <h3 className="text-base font-extrabold text-slate-800 uppercase tracking-tight">Profile Settings</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Update your personal account information and secure credentials.</p>
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Profile Settings</h3>
+              <p className="text-xs text-slate-500 mt-1">Update your personal account information and secure credentials.</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 mt-2">
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Full Name
-                <Input required value={profileName} onChange={e => setProfileName(e.target.value)} className="h-9.5 text-xs" />
+                <Input required value={profileName} onChange={e => setProfileName(e.target.value)} className="h-9.5 text-xs rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0" />
               </label>
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Department
-                <Input value={profileDept} onChange={e => setProfileDept(e.target.value)} className="h-9.5 text-xs" />
+                <Input value={profileDept} onChange={e => setProfileDept(e.target.value)} className="h-9.5 text-xs rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0" />
               </label>
             </div>
-            <label className="grid gap-1 text-xs font-bold text-slate-500">
+            <label className="grid gap-1 text-xs font-semibold text-slate-600">
               Email Address (Read-only)
-              <Input disabled value={actor?.email || ""} className="h-9.5 text-xs bg-slate-50 text-slate-400" />
+              <Input disabled value={actor?.email || ""} className="h-9.5 text-xs bg-slate-50 text-slate-400 rounded-sm border-[#E5E7EB] shadow-none" />
             </label>
             <div className="border-t border-slate-100 pt-4 mt-2">
               <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">Change Security Password</h4>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-xs font-bold text-slate-500">
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">
                   New Password
-                  <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" className="h-9.5 text-xs" />
+                  <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" className="h-9.5 text-xs rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0" />
                 </label>
-                <label className="grid gap-1 text-xs font-bold text-slate-500">
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">
                   Confirm Password
-                  <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm credentials" className="h-9.5 text-xs" />
+                  <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Confirm credentials" className="h-9.5 text-xs rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0" />
                 </label>
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-4">
-              <Button type="submit" disabled={isLoading} className="bg-blue-600 h-9 text-xs">
+              <Button type="submit" disabled={isLoading} className="bg-[#002652] hover:bg-[#001b3a] h-9 text-xs rounded-sm">
                 {isLoading ? "Saving changes..." : "Save Credentials"}
               </Button>
             </div>
@@ -1296,27 +1530,27 @@ function SettingsPanel() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-extrabold text-slate-800 uppercase tracking-tight">GST Configuration</h3>
-                <p className="text-xs text-slate-400 font-semibold mt-0.5">Manage tax rate slabs applied to final calculation costing invoice summaries.</p>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">GST Configuration</h3>
+                <p className="text-xs text-slate-500 mt-1">Manage tax rate slabs applied to final calculation costing invoice summaries.</p>
               </div>
               {isAdmin && (
-                <Button size="sm" onClick={() => setShowGstModal(true)} className="bg-[#087443] hover:bg-[#065a33] text-xs h-8">
+                <Button size="sm" onClick={() => setShowGstModal(true)} className="bg-[#002652] hover:bg-[#001b3a] text-xs h-8.5 rounded-sm">
                   <Plus className="mr-1 size-3.5" /> Add New Slab
                 </Button>
               )}
             </div>
 
             {!isAdmin && (
-              <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2 mt-1">
+              <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded-sm p-3.5 text-xs font-semibold flex items-center gap-2 mt-1">
                 <AlertCircle className="size-4.5 shrink-0 text-amber-500" />
                 <span>GST configurations are in read-only mode for non-admin accounts. Contact an administrator to add or modify slabs.</span>
               </div>
             )}
 
-            <div className="overflow-x-auto border border-slate-150 rounded-xl mt-2">
+            <div className="overflow-x-auto border border-[#E5E7EB] rounded-sm mt-2">
               <Table>
                 <thead>
-                  <tr className="bg-slate-50 text-[10px] uppercase font-bold tracking-wider border-b border-slate-150 text-slate-500">
+                  <tr className="bg-[#FAFAFA] text-[10px] uppercase font-bold tracking-wider border-b border-[#E5E7EB] text-slate-500">
                     <TableHead>Slab Name</TableHead>
                     <TableHead>Tax Code</TableHead>
                     <TableHead>Slab Rate (%)</TableHead>
@@ -1327,11 +1561,11 @@ function SettingsPanel() {
                 </thead>
                 <tbody>
                   {gstSlabs.map((slab) => (
-                    <tr key={slab.id} className="text-xs border-b border-slate-100 hover:bg-slate-50/50">
-                      <TableCell className="font-bold text-slate-800">{slab.name}</TableCell>
-                      <TableCell className="font-mono">{slab.code}</TableCell>
-                      <TableCell className="font-bold text-slate-700">{Number(slab.rate)}%</TableCell>
-                      <TableCell className="text-slate-400 truncate max-w-xs">{slab.description || "General industrial tax slab"}</TableCell>
+                    <tr key={slab.id} className="text-xs border-b border-[#E5E7EB] hover:bg-slate-50/50">
+                      <TableCell className="font-semibold text-slate-800">{slab.name}</TableCell>
+                      <TableCell className="font-mono text-xs">{slab.code}</TableCell>
+                      <TableCell className="font-bold text-slate-700 font-mono">{Number(slab.rate)}%</TableCell>
+                      <TableCell className="text-slate-500 truncate max-w-xs">{slab.description || "General industrial tax slab"}</TableCell>
                       <TableCell>
                         <Badge className={slab.active ? "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]" : "border-slate-200 bg-slate-100 text-slate-500"}>
                           {slab.active ? "Active" : "Inactive"}
@@ -1340,7 +1574,7 @@ function SettingsPanel() {
                       {isAdmin && (
                         <TableCell className="text-right">
                           {slab.active ? (
-                            <Button size="sm" variant="outline" onClick={() => handleDeactivateSlab(slab.id, slab.code)} className="h-6.5 text-[10px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                            <Button size="sm" variant="outline" onClick={() => handleDeactivateSlab(slab.id, slab.code)} className="h-6.5 text-[10px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-sm">
                               Deactivate
                             </Button>
                           ) : (
@@ -1360,14 +1594,14 @@ function SettingsPanel() {
         {activeTab === "theme" && (
           <div className="flex flex-col gap-5 max-w-xl">
             <div>
-              <h3 className="text-base font-extrabold text-slate-800 uppercase tracking-tight">Currency & Theme Preferences</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Manage base operational currency and customize user interface density themes.</p>
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Currency & Theme Preferences</h3>
+              <p className="text-xs text-slate-500 mt-1">Manage base operational currency and customize user interface density themes.</p>
             </div>
 
             {/* Currency settings card */}
-            <Card className="border-slate-150 p-4">
-              <CardTitle className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <DollarSign className="size-4 text-blue-600" /> Operational Currency
+            <Card className="border-[#E5E7EB] p-4 shadow-none rounded-sm bg-white">
+              <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <DollarSign className="size-4 text-[#002652]" /> Operational Currency
               </CardTitle>
               <div className="flex flex-col gap-2.5">
                 <label className="text-xs font-semibold text-slate-500 flex flex-col gap-1.5">
@@ -1376,7 +1610,7 @@ function SettingsPanel() {
                     disabled={!isAdmin}
                     value={systemFields["currency"] || "INR"}
                     onChange={(e) => setSystemFields(curr => ({ ...curr, currency: e.target.value }))}
-                    className="h-9.5 rounded-lg border bg-white px-2.5 text-xs text-slate-700 font-bold max-w-xs disabled:bg-slate-50 disabled:text-slate-400"
+                    className="h-9.5 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs text-slate-700 font-bold max-w-xs disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none"
                   >
                     <option value="INR">INR (₹) - Indian Rupee (Default)</option>
                     <option value="USD">USD ($) - United States Dollar</option>
@@ -1384,7 +1618,7 @@ function SettingsPanel() {
                   </select>
                 </label>
                 {isAdmin && (
-                  <Button onClick={handleSystemSettingsSave} className="bg-blue-600 h-8 max-w-xs text-xs mt-1">
+                  <Button onClick={handleSystemSettingsSave} className="bg-[#002652] hover:bg-[#001b3a] h-8.5 max-w-xs text-xs mt-1 rounded-sm">
                     Save Currency Preset
                   </Button>
                 )}
@@ -1392,9 +1626,9 @@ function SettingsPanel() {
             </Card>
 
             {/* Theme Settings card */}
-            <Card className="border-slate-150 p-4">
-              <CardTitle className="text-xs font-extrabold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <Sliders className="size-4 text-green-600" /> Interface Theme Density
+            <Card className="border-[#E5E7EB] p-4 shadow-none rounded-sm bg-white">
+              <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+                <Sliders className="size-4 text-[#D97706]" /> Interface Theme Density
               </CardTitle>
               <div className="grid gap-3 sm:grid-cols-3">
                 {[
@@ -1408,14 +1642,14 @@ function SettingsPanel() {
                       setErpTheme(t.id);
                       toast.success(`Theme preference changed to ${t.name}`);
                     }}
-                    className={`flex flex-col gap-1 p-3 text-left border rounded-xl transition-all cursor-pointer ${
+                    className={`flex flex-col gap-1 p-3 text-left border rounded-sm transition-all cursor-pointer ${
                       erpTheme === t.id
-                        ? "border-blue-600 bg-blue-50/20 shadow-xs ring-1 ring-blue-600"
-                        : "border-slate-200 hover:bg-slate-50"
+                        ? "border-[#002652] bg-slate-50 ring-0"
+                        : "border-[#E5E7EB] hover:bg-slate-50"
                     }`}
                   >
-                    <span className="text-xs font-bold text-slate-800">{t.name}</span>
-                    <span className="text-[10px] text-slate-400 leading-normal font-medium mt-0.5">{t.desc}</span>
+                    <span className="text-xs font-bold text-slate-850">{t.name}</span>
+                    <span className="text-[10px] text-slate-500 leading-normal mt-0.5">{t.desc}</span>
                   </button>
                 ))}
               </div>
@@ -1427,12 +1661,12 @@ function SettingsPanel() {
         {activeTab === "system" && (
           <form onSubmit={handleSystemSettingsSave} className="flex flex-col gap-4 max-w-xl">
             <div>
-              <h3 className="text-base font-extrabold text-slate-800 uppercase tracking-tight">System Preferences & Defaults</h3>
-              <p className="text-xs text-slate-400 font-semibold mt-0.5">Configure platform security parameter limits and default calculation policies.</p>
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">System Preferences & Defaults</h3>
+              <p className="text-xs text-slate-500 mt-1">Configure platform security parameter limits and default calculation policies.</p>
             </div>
 
             {!isAdmin && (
-              <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded-xl p-3.5 text-xs font-semibold flex items-center gap-2 mt-1">
+              <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded-sm p-3.5 text-xs font-semibold flex items-center gap-2 mt-1">
                 <ShieldAlert className="size-4.5 shrink-0 text-amber-500" />
                 <span>You are in view-only mode. System settings can only be altered by authorized system administrators.</span>
               </div>
@@ -1440,80 +1674,80 @@ function SettingsPanel() {
 
             {/* Calculations Default parameters */}
             <div className="grid gap-3.5 sm:grid-cols-2 mt-2">
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Decimal Place Precision
                 <Input
                   type="number"
                   disabled={!isAdmin}
                   value={systemFields["calculation_decimal_places"] || "4"}
                   onChange={e => setSystemFields(curr => ({ ...curr, calculation_decimal_places: e.target.value }))}
-                  className="h-9.5 text-xs disabled:bg-slate-50"
+                  className="h-9.5 text-xs disabled:bg-slate-50 rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0"
                 />
               </label>
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Max Components Per Alloy
                 <Input
                   type="number"
                   disabled={!isAdmin}
                   value={systemFields["max_alloy_components"] || "10"}
                   onChange={e => setSystemFields(curr => ({ ...curr, max_alloy_components: e.target.value }))}
-                  className="h-9.5 text-xs disabled:bg-slate-50"
+                  className="h-9.5 text-xs disabled:bg-slate-50 rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0"
                 />
               </label>
             </div>
 
             {/* Platform security parameters */}
             <div className="grid gap-3.5 sm:grid-cols-2">
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Session Idle Timeout (Minutes)
                 <Input
                   type="number"
                   disabled={!isAdmin}
                   value={systemFields["session_timeout_minutes"] || "60"}
                   onChange={e => setSystemFields(curr => ({ ...curr, session_timeout_minutes: e.target.value }))}
-                  className="h-9.5 text-xs disabled:bg-slate-50"
+                  className="h-9.5 text-xs disabled:bg-slate-50 rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0"
                 />
               </label>
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Max Login Failed Lockout Attempts
                 <Input
                   type="number"
                   disabled={!isAdmin}
                   value={systemFields["max_login_attempts"] || "5"}
                   onChange={e => setSystemFields(curr => ({ ...curr, max_login_attempts: e.target.value }))}
-                  className="h-9.5 text-xs disabled:bg-slate-50"
+                  className="h-9.5 text-xs disabled:bg-slate-50 rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0"
                 />
               </label>
             </div>
 
             {/* Master pricing settings */}
             <div className="grid gap-3.5 sm:grid-cols-2">
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Default Weight unit
                 <Input
                   disabled
                   value={systemFields["weight_unit"] || "kg"}
-                  className="h-9.5 text-xs bg-slate-50 text-slate-400"
+                  className="h-9.5 text-xs bg-slate-50 text-slate-400 rounded-sm border-[#E5E7EB] shadow-none"
                 />
               </label>
-              <label className="grid gap-1 text-xs font-bold text-slate-500">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">
                 Price validity duration (Days)
                 <Input
                   type="number"
                   disabled={!isAdmin}
                   value={systemFields["price_validity_days"] || "30"}
                   onChange={e => setSystemFields(curr => ({ ...curr, price_validity_days: e.target.value }))}
-                  className="h-9.5 text-xs disabled:bg-slate-50"
+                  className="h-9.5 text-xs disabled:bg-slate-50 rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0"
                 />
               </label>
             </div>
 
             {isAdmin && (
               <div className="flex justify-between items-center gap-2 border-t border-slate-100 pt-4 mt-4">
-                <Button type="button" variant="outline" onClick={handleResetSystemSettings} className="h-9 text-xs border-slate-200 hover:bg-slate-50 text-slate-600">
+                <Button type="button" variant="outline" onClick={handleResetSystemSettings} className="h-9 text-xs border-[#E5E7EB] hover:bg-slate-50 text-slate-600 rounded-sm">
                   Reset Defaults
                 </Button>
-                <Button type="submit" disabled={isLoading} className="bg-blue-600 h-9 text-xs">
+                <Button type="submit" disabled={isLoading} className="bg-[#002652] hover:bg-[#001b3a] h-9 text-xs rounded-sm">
                   {isLoading ? "Saving Settings..." : "Save System Configs"}
                 </Button>
               </div>
@@ -1522,31 +1756,35 @@ function SettingsPanel() {
         )}
       </Card>
 
-      {/* GST slab creation Modal popup */}
+      {/* GST slab creation Modal to Drawer */}
       {showGstModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-md rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#032f67] p-4 text-white">
-              <h3 className="text-sm font-bold uppercase flex items-center gap-2"><Plus className="size-4.5" /> Create GST Tax Slab</h3>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setShowGstModal(false)} />
+          <div className="relative w-full max-w-md bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-[#E5E7EB] p-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Plus className="size-4" /> Create GST Tax Slab
+              </h3>
+              <button type="button" onClick={() => setShowGstModal(false)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <form onSubmit={handleCreateGstSlab} className="p-5 flex flex-col gap-4 text-xs">
-              <label className="grid gap-1 font-bold text-slate-500">Slab Name
-                <Input required value={gstName} onChange={e => setGstName(e.target.value)} placeholder="e.g. Special Recycled Metal slab" className="h-9 text-xs mt-0.5" />
+            <form onSubmit={handleCreateGstSlab} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Slab Name
+                <Input required value={gstName} onChange={e => setGstName(e.target.value)} placeholder="e.g. Special Recycled Metal slab" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 font-bold text-slate-500">Unique Code
-                  <Input required value={gstCode} onChange={e => setGstCode(e.target.value)} placeholder="e.g. GST-5" className="h-9 text-xs mt-0.5" />
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Unique Code
+                  <Input required value={gstCode} onChange={e => setGstCode(e.target.value)} placeholder="e.g. GST-5" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
                 </label>
-                <label className="grid gap-1 font-bold text-slate-500">Rate (%)
-                  <Input required type="number" step="0.01" value={gstRate} onChange={e => setGstRate(e.target.value)} placeholder="e.g. 5" className="h-9 text-xs mt-0.5" />
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Rate (%)
+                  <Input required type="number" step="0.01" value={gstRate} onChange={e => setGstRate(e.target.value)} placeholder="e.g. 5" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
                 </label>
               </div>
-              <label className="grid gap-1 font-bold text-slate-500">Description (Optional)
-                <Input value={gstDesc} onChange={e => setGstDesc(e.target.value)} placeholder="e.g. Reduced rate applied to raw blends" className="h-9 text-xs mt-0.5" />
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Description (Optional)
+                <Input value={gstDesc} onChange={e => setGstDesc(e.target.value)} placeholder="e.g. Reduced rate applied to raw blends" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
               </label>
-              <div className="flex justify-end gap-2 border-t pt-4 mt-2">
-                <Button type="button" variant="outline" onClick={() => setShowGstModal(false)} className="h-8.5 text-xs">Cancel</Button>
-                <Button type="submit" className="bg-[#032f67] h-8.5 text-xs text-white hover:bg-[#021f45]">Register Slab</Button>
+              <div className="flex justify-end gap-2 border-t border-[#E5E7EB] pt-4 mt-auto">
+                <Button type="button" variant="outline" onClick={() => setShowGstModal(false)} className="text-xs">Cancel</Button>
+                <Button type="submit" className="bg-[#002652] hover:bg-[#001b3a] text-xs">Register Slab</Button>
               </div>
             </form>
           </div>
@@ -1554,9 +1792,6 @@ function SettingsPanel() {
       )}
     </div>
   );
-}
-function GridTable({ rows, columns }: { rows: Array<{ name?: string; source?: string; value?: string; extra?: string }>; columns: string[] }) {
-  return <Card><CardContent className="overflow-x-auto p-0"><Table><thead><tr>{columns.map((column) => <TableHead key={column}>{column}</TableHead>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={`${row.name}-${index}`}><TableCell className="font-semibold">{row.name}</TableCell><TableCell>{row.source}</TableCell><TableCell>{row.value}</TableCell><TableCell>{row.extra}</TableCell></tr>)}</tbody></Table></CardContent></Card>;
 }
 
 function CalculationsEnterpriseTable() {
@@ -1794,7 +2029,7 @@ export function ReportsPage() {
     const doc = new jsPDF();
     
     // Enterprise Branding Ribbon
-    doc.setFillColor(0, 87, 184); // JSW Corporate Blue
+    doc.setFillColor(0, 38, 82); // JSW Navy Blue
     doc.rect(0, 0, 210, 24, "F");
     
     doc.setFont("helvetica", "bold");
@@ -1978,8 +2213,8 @@ export function ReportsPage() {
       <div className="grid gap-5 xl:grid-cols-[0.25fr_1fr]">
         
         {/* Tab options sidepanel selector */}
-        <Card className="border-slate-200 bg-white shadow-xs p-3 flex flex-col gap-2 h-fit">
-          <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 px-2 mb-1">Report Slices</span>
+        <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none p-3 flex flex-col gap-1 h-fit">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 mb-2">Report Slices</span>
           {[
             { id: "calculations" as const, label: "Calculation Runs" },
             { id: "daily" as const, label: "Daily Cost Runs" },
@@ -1992,9 +2227,9 @@ export function ReportsPage() {
                 setReportType(tab.id);
                 setPage(1);
               }}
-              className={`w-full py-2.5 px-3.5 text-left text-xs font-bold rounded-xl transition-all ${
+              className={`w-full py-2 px-3.5 text-left text-xs font-bold rounded-sm transition-all ${
                 reportType === tab.id
-                  ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
+                  ? "bg-[#F3F4F6] text-[#002652] border-l-2 border-[#002652]"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
               }`}
             >
@@ -2004,10 +2239,10 @@ export function ReportsPage() {
         </Card>
 
         {/* Dynamic visual grid actions wrapper */}
-        <Card className="border-slate-200 bg-white shadow-xs overflow-hidden flex flex-col gap-4 p-5">
+        <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none overflow-hidden flex flex-col gap-4 p-5">
           <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
             <div>
-              <h3 className="font-extrabold text-slate-800 tracking-tight text-sm uppercase">
+              <h3 className="font-bold text-slate-900 tracking-tight text-sm uppercase">
                 {reportType === "calculations"
                   ? "Costing Calculation Reports"
                   : reportType === "daily"
@@ -2016,7 +2251,7 @@ export function ReportsPage() {
                   ? "Monthly Calculations Summary"
                   : "Operator Activity Logs"}
               </h3>
-              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              <p className="text-[11px] text-slate-500 mt-1">
                 Generate, search, filter, and export formal reports in PDF or Spreadsheet formats.
               </p>
             </div>
@@ -2025,7 +2260,7 @@ export function ReportsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8.5 rounded-lg border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5"
+                className="h-8.5 rounded-sm border-[#E5E7EB] hover:bg-slate-50 text-slate-750 text-xs font-semibold flex items-center gap-1.5 shadow-none"
                 onClick={handleExportPDF}
                 disabled={filteredData.length === 0}
               >
@@ -2034,7 +2269,7 @@ export function ReportsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8.5 rounded-lg border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5"
+                className="h-8.5 rounded-sm border-[#E5E7EB] hover:bg-slate-50 text-slate-750 text-xs font-semibold flex items-center gap-1.5 shadow-none"
                 onClick={handleExportExcel}
                 disabled={filteredData.length === 0}
               >
@@ -2043,7 +2278,7 @@ export function ReportsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8.5 rounded-lg border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5"
+                className="h-8.5 rounded-sm border-[#E5E7EB] hover:bg-slate-50 text-slate-750 text-xs font-semibold flex items-center gap-1.5 shadow-none"
                 onClick={handleExportCSV}
                 disabled={filteredData.length === 0}
               >
@@ -2053,7 +2288,7 @@ export function ReportsPage() {
           </div>
 
           {/* Search bar and parameter filters */}
-          <div className="grid gap-3 md:grid-cols-3 bg-slate-50 p-3.5 rounded-xl border border-slate-150">
+          <div className="grid gap-3 md:grid-cols-3 bg-[#FAFAFA] p-3 rounded-md border border-[#E5E7EB]">
             <div className="flex flex-col gap-1 text-left">
               <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                 <Search className="h-3 w-3" /> Search
@@ -2074,7 +2309,7 @@ export function ReportsPage() {
                   setSearch(e.target.value);
                   setPage(1);
                 }}
-                className="h-9 text-xs bg-white border border-slate-200 rounded-lg"
+                className="h-9 text-xs bg-white border border-[#E5E7EB] rounded-sm shadow-none focus-visible:ring-0"
               />
             </div>
 
@@ -2083,7 +2318,7 @@ export function ReportsPage() {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
                   <Calendar className="h-3 w-3" /> Timeframe
                 </label>
-                <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 h-9">
+                <div className="flex gap-1 bg-white p-1 rounded-sm border border-[#E5E7EB] h-9">
                   {[
                     { id: "all", label: "All Time" },
                     { id: "today", label: "Today" },
@@ -2095,9 +2330,9 @@ export function ReportsPage() {
                         setTimeframe(t.id);
                         setPage(1);
                       }}
-                      className={`flex-1 text-[9px] font-extrabold rounded-md uppercase tracking-wide transition-all ${
+                      className={`flex-1 text-[9px] font-bold rounded-sm uppercase tracking-wide transition-all ${
                         timeframe === t.id
-                          ? "bg-slate-100 text-blue-600 font-extrabold"
+                          ? "bg-[#F3F4F6] text-[#002652]"
                           : "text-slate-500 hover:text-slate-800"
                       }`}
                     >
@@ -2114,141 +2349,141 @@ export function ReportsPage() {
             <CalculationsEnterpriseTable />
           ) : (
             <>
-          <div className="overflow-x-auto border border-slate-150 rounded-xl">
-            <Table>
-              <thead>
-                <tr className="bg-slate-50 text-[10px] uppercase font-bold tracking-wider border-b border-slate-150 text-slate-500">
-                  {reportType === "daily" ? (
-                    <>
-                      <TableHead className="font-bold text-left">Date</TableHead>
-                      <TableHead className="font-bold text-left">Runs Recorded</TableHead>
-                      <TableHead className="font-bold text-left">Volume (kg)</TableHead>
-                      <TableHead className="font-bold text-left">Gross Cost (INR)</TableHead>
-                      <TableHead className="font-bold text-left">GST Generated</TableHead>
-                      <TableHead className="font-bold text-left">Final Cost (INR)</TableHead>
-                    </>
-                  ) : reportType === "monthly" ? (
-                    <>
-                      <TableHead className="font-bold text-left">Month</TableHead>
-                      <TableHead className="font-bold text-left">Calculations Run</TableHead>
-                      <TableHead className="font-bold text-left">Cumulative Volume</TableHead>
-                      <TableHead className="font-bold text-left">Avg Rate (INR/kg)</TableHead>
-                      <TableHead className="font-bold text-left">Gross Cost (INR)</TableHead>
-                      <TableHead className="font-bold text-left">Cumulative Value (INR)</TableHead>
-                    </>
-                  ) : (
-                    <>
-                      <TableHead className="font-bold text-left">Operator</TableHead>
-                      <TableHead className="font-bold text-left">Action</TableHead>
-                      <TableHead className="font-bold text-left">Entity Type</TableHead>
-                      <TableHead className="font-bold text-left">Entity Key</TableHead>
-                      <TableHead className="font-bold text-left">Timestamp</TableHead>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredData.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="py-12 text-center text-slate-400 font-semibold text-xs bg-slate-50/50"
-                    >
-                      <FileBarChart2 className="h-8 w-8 text-slate-350 mb-2.5 mx-auto animate-pulse" />
-                      No matching costing records found inside this timeframe.
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedData.map((row, idx) => (
-                    <tr
-                      key={idx}
-                      className="text-xs hover:bg-slate-50 transition-colors border-b border-slate-100"
-                    >
+              <div className="overflow-x-auto border border-[#E5E7EB] rounded-md">
+                <Table>
+                  <thead>
+                    <tr className="bg-[#FAFAFA] text-[10px] uppercase font-bold tracking-wider border-b border-[#E5E7EB] text-slate-500">
                       {reportType === "daily" ? (
-                        (() => {
-                          const r = row as unknown as DailyReportRow;
-                          return (
-                            <>
-                              <TableCell className="font-bold text-slate-700">{r.date}</TableCell>
-                              <TableCell className="font-bold text-slate-650">{r.count} runs</TableCell>
-                              <TableCell className="font-bold text-slate-600">{r.qty.toLocaleString()} kg</TableCell>
-                              <TableCell className="font-bold text-slate-700">{inr(r.value)}</TableCell>
-                              <TableCell className="font-bold text-slate-700">{inr(r.gst)}</TableCell>
-                              <TableCell className="font-black text-blue-600">{inr(r.total)}</TableCell>
-                            </>
-                          );
-                        })()
+                        <>
+                          <TableHead className="font-bold text-left">Date</TableHead>
+                          <TableHead className="font-bold text-left">Runs Recorded</TableHead>
+                          <TableHead className="font-bold text-left">Volume (kg)</TableHead>
+                          <TableHead className="font-bold text-left">Gross Cost (INR)</TableHead>
+                          <TableHead className="font-bold text-left">GST Generated</TableHead>
+                          <TableHead className="font-bold text-left">Final Cost (INR)</TableHead>
+                        </>
                       ) : reportType === "monthly" ? (
-                        (() => {
-                          const r = row as unknown as MonthlyReportRow;
-                          return (
-                            <>
-                              <TableCell className="font-bold text-slate-800">{r.month}</TableCell>
-                              <TableCell className="font-bold text-slate-650">{r.count} runs</TableCell>
-                              <TableCell className="font-bold text-slate-600">{r.qty.toLocaleString()} kg</TableCell>
-                              <TableCell className="font-bold text-slate-700">{r.avg} /kg</TableCell>
-                              <TableCell className="font-bold text-slate-700">{inr(r.gross)}</TableCell>
-                              <TableCell className="font-black text-[#0057b8]">{inr(r.total)}</TableCell>
-                            </>
-                          );
-                        })()
+                        <>
+                          <TableHead className="font-bold text-left">Month</TableHead>
+                          <TableHead className="font-bold text-left">Calculations Run</TableHead>
+                          <TableHead className="font-bold text-left">Cumulative Volume</TableHead>
+                          <TableHead className="font-bold text-left">Avg Rate (INR/kg)</TableHead>
+                          <TableHead className="font-bold text-left">Gross Cost (INR)</TableHead>
+                          <TableHead className="font-bold text-left">Cumulative Value (INR)</TableHead>
+                        </>
                       ) : (
-                        (() => {
-                          const r = row as unknown as ActivityReportRow;
-                          return (
-                            <>
-                              <TableCell className="font-bold text-slate-850 truncate max-w-[150px]">
-                                {r.operator}
-                              </TableCell>
-                              <TableCell>
-                                <Badge className="bg-slate-100 text-slate-700 border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase">
-                                  {r.action}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="font-semibold text-slate-500">{r.entity}</TableCell>
-                              <TableCell className="font-bold text-slate-650">{r.id}</TableCell>
-                              <TableCell className="font-medium text-slate-400">{r.time}</TableCell>
-                            </>
-                          );
-                        })()
+                        <>
+                          <TableHead className="font-bold text-left">Operator</TableHead>
+                          <TableHead className="font-bold text-left">Action</TableHead>
+                          <TableHead className="font-bold text-left">Entity Type</TableHead>
+                          <TableHead className="font-bold text-left">Entity Key</TableHead>
+                          <TableHead className="font-bold text-left">Timestamp</TableHead>
+                        </>
                       )}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
-          </div>
-
-          {/* Table pagination control row */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-500 text-left">
-              <span>
-                Showing page <strong className="text-slate-800 font-extrabold">{page}</strong> of{" "}
-                <strong className="text-slate-800 font-extrabold">{totalPages}</strong> (
-                {filteredData.length} records total)
-              </span>
-              <div className="flex gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-lg border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                >
-                  Prev
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 rounded-lg border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                >
-                  Next
-                </Button>
+                  </thead>
+                  <tbody>
+                    {filteredData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="py-12 text-center text-slate-400 font-semibold text-xs bg-slate-50/50"
+                        >
+                          <FileBarChart2 className="h-8 w-8 text-slate-350 mb-2.5 mx-auto animate-pulse" />
+                          No matching costing records found inside this timeframe.
+                        </td>
+                      </tr>
+                    ) : (
+                      paginatedData.map((row, idx) => (
+                        <tr
+                          key={idx}
+                          className="text-xs hover:bg-slate-50/50 transition-colors border-b border-[#E5E7EB]"
+                        >
+                          {reportType === "daily" ? (
+                            (() => {
+                              const r = row as unknown as DailyReportRow;
+                              return (
+                                <>
+                                  <TableCell className="font-semibold text-slate-700">{r.date}</TableCell>
+                                  <TableCell className="font-medium text-slate-600">{r.count} runs</TableCell>
+                                  <TableCell className="font-medium text-slate-600 font-mono">{r.qty.toLocaleString()} kg</TableCell>
+                                  <TableCell className="font-medium text-slate-700 font-mono">{inr(r.value)}</TableCell>
+                                  <TableCell className="font-medium text-slate-700 font-mono">{inr(r.gst)}</TableCell>
+                                  <TableCell className="font-bold text-blue-650 font-mono">{inr(r.total)}</TableCell>
+                                </>
+                              );
+                            })()
+                          ) : reportType === "monthly" ? (
+                            (() => {
+                              const r = row as unknown as MonthlyReportRow;
+                              return (
+                                <>
+                                  <TableCell className="font-semibold text-slate-800">{r.month}</TableCell>
+                                  <TableCell className="font-medium text-slate-600">{r.count} runs</TableCell>
+                                  <TableCell className="font-medium text-slate-600 font-mono">{r.qty.toLocaleString()} kg</TableCell>
+                                  <TableCell className="font-medium text-slate-700 font-mono">{r.avg} /kg</TableCell>
+                                  <TableCell className="font-medium text-slate-700 font-mono">{inr(r.gross)}</TableCell>
+                                  <TableCell className="font-bold text-[#002652] font-mono">{inr(r.total)}</TableCell>
+                                </>
+                              );
+                            })()
+                          ) : (
+                            (() => {
+                              const r = row as unknown as ActivityReportRow;
+                              return (
+                                <>
+                                  <TableCell className="font-semibold text-slate-700 truncate max-w-[150px]">
+                                    {r.operator}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className="bg-slate-100 text-slate-700 border-slate-200 px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase">
+                                      {r.action}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell className="font-semibold text-slate-500">{r.entity}</TableCell>
+                                  <TableCell className="font-semibold text-slate-600 font-mono">{r.id}</TableCell>
+                                  <TableCell className="font-medium text-slate-400 font-mono">{r.time}</TableCell>
+                                </>
+                              );
+                            })()
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </Table>
               </div>
-            </div>
-          )}
+
+              {/* Table pagination control row */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-500 text-left">
+                  <span>
+                    Showing page <strong className="text-slate-800 font-extrabold">{page}</strong> of{" "}
+                    <strong className="text-slate-800 font-extrabold">{totalPages}</strong> (
+                    {filteredData.length} records total)
+                  </span>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-sm border-[#E5E7EB] text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-none"
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-sm border-[#E5E7EB] text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-none"
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </Card>
@@ -2275,28 +2510,28 @@ export function AuditPage() {
   const { data: usersData } = useUsers();
   const operators = (usersData?.data || []) as any[];
 
-  // Common Action Badges Styling
+  // Common Action Badges Styling - Flat minimalist style
   const getActionBadge = (act: string) => {
     const actUpper = act.toUpperCase();
     if (actUpper.includes("LOGIN_FAILED")) {
-      return <Badge className="bg-red-50 text-red-700 border border-red-200 uppercase text-[10px] font-bold">Failed Login</Badge>;
+      return <Badge className="bg-[#FEE2E2] text-[#991B1B] border-none uppercase text-[10px] font-bold shadow-none rounded-sm">Failed Login</Badge>;
     }
     if (actUpper.includes("LOGIN")) {
-      return <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 uppercase text-[10px] font-bold">Login</Badge>;
+      return <Badge className="bg-[#D1FAE5] text-[#065F46] border-none uppercase text-[10px] font-bold shadow-none rounded-sm">Login</Badge>;
     }
     if (actUpper.includes("CREATE")) {
-      return <Badge className="bg-blue-50 text-blue-700 border border-blue-200 uppercase text-[10px] font-bold">Create</Badge>;
+      return <Badge className="bg-[#DBEAFE] text-[#1E40AF] border-none uppercase text-[10px] font-bold shadow-none rounded-sm">Create</Badge>;
     }
     if (actUpper.includes("UPDATE")) {
-      return <Badge className="bg-amber-50 text-amber-700 border border-amber-200 uppercase text-[10px] font-bold">Update</Badge>;
+      return <Badge className="bg-[#FEF3C7] text-[#92400E] border-none uppercase text-[10px] font-bold shadow-none rounded-sm">Update</Badge>;
     }
     if (actUpper.includes("PRICE_UPDATE")) {
-      return <Badge className="bg-purple-50 text-purple-700 border border-purple-200 uppercase text-[10px] font-bold">Price Adjust</Badge>;
+      return <Badge className="bg-[#F3E8FF] text-[#6B21A8] border-none uppercase text-[10px] font-bold shadow-none rounded-sm">Price Adjust</Badge>;
     }
     if (actUpper.includes("DEACTIVATE") || actUpper.includes("DELETE")) {
-      return <Badge className="bg-slate-50 text-slate-700 border border-slate-200 uppercase text-[10px] font-bold">Deactivate</Badge>;
+      return <Badge className="bg-[#F3F4F6] text-[#374151] border-none uppercase text-[10px] font-bold shadow-none rounded-sm">Deactivate</Badge>;
     }
-    return <Badge className="bg-slate-100 text-slate-800 uppercase text-[10px] font-bold">{act}</Badge>;
+    return <Badge className="bg-slate-100 text-slate-800 uppercase text-[10px] font-bold shadow-none rounded-sm">{act}</Badge>;
   };
 
   const auditColumns = useMemo<EnterpriseColumnDef<any>[]>(() => [
@@ -2307,16 +2542,16 @@ export function AuditPage() {
       meta: { label: "Operator" },
       cell: ({ row }) => row.original.user ? (
         <div>
-          <p className="font-bold text-slate-800">{row.original.user.name}</p>
-          <p className="text-[10px] text-slate-400 font-medium">{row.original.user.email}</p>
+          <p className="font-semibold text-slate-850">{row.original.user.name}</p>
+          <p className="text-[10px] text-slate-400 font-medium font-mono">{row.original.user.email}</p>
         </div>
-      ) : <span className="text-slate-400 italic">System Auto</span>
+      ) : <span className="text-slate-450 italic">System Auto</span>
     },
     { accessorKey: "action", header: "Action Trigger", meta: { label: "Action" }, cell: ({ row }) => getActionBadge(row.original.action) },
     { accessorKey: "entity", header: "Target Entity", meta: { label: "Entity" }, cell: ({ row }) => <span className="font-semibold uppercase text-slate-500">{row.original.entity}</span> },
     { accessorKey: "entityId", header: "Entity ID / Key", enableSorting: false, meta: { label: "Entity ID", className: "font-mono text-[11px]" }, cell: ({ row }) => row.original.entityId || "N/A" },
     { accessorKey: "ipAddress", header: "Client IP", meta: { label: "IP", className: "font-mono" }, cell: ({ row }) => row.original.ipAddress || "Internal" },
-    { accessorKey: "createdAt", header: "Timestamp", meta: { label: "Timestamp" }, cell: ({ row }) => new Date(row.original.createdAt).toLocaleString("en-IN", { hour12: true }) }
+    { accessorKey: "createdAt", header: "Timestamp", meta: { label: "Timestamp" }, cell: ({ row }) => <span className="font-mono text-slate-600">{new Date(row.original.createdAt).toLocaleString("en-IN", { hour12: true })}</span> }
   ], []);
 
   return (
@@ -2332,15 +2567,15 @@ export function AuditPage() {
       </div>
 
       <div className="grid gap-5">
-        <Card className="border-slate-200 bg-white shadow-xs p-5 flex flex-col gap-4">
+        <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none p-5 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
             <div>
-              <h3 className="font-extrabold text-slate-800 tracking-tight text-sm uppercase">Audit Log Stream</h3>
-              <p className="text-[11px] text-slate-400 font-semibold mt-0.5">
+              <h3 className="font-bold text-slate-900 tracking-tight text-sm uppercase">Audit Log Stream</h3>
+              <p className="text-[11px] text-slate-500 mt-1">
                 Real-time transaction tracking, user access audits, and metadata capture.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => auditQuery.refetch()} className="h-8.5 text-xs font-bold border-slate-200 hover:bg-slate-50 text-slate-700">
+            <Button variant="outline" size="sm" onClick={() => auditQuery.refetch()} className="h-8.5 text-xs font-bold border-[#E5E7EB] hover:bg-slate-50 text-slate-700 rounded-sm shadow-none">
               <RefreshCw className="mr-1 size-3.5" /> Reload Stream
             </Button>
           </div>
@@ -2362,7 +2597,7 @@ export function AuditPage() {
             filters={
               <>
                 <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+                  className="h-9 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs font-semibold text-slate-650 focus:outline-none"
                   value={auditTable.query.filters.userId ?? ""}
                   onChange={(event) => auditTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, userId: event.target.value || undefined } }))}
                 >
@@ -2372,7 +2607,7 @@ export function AuditPage() {
                   ))}
                 </select>
                 <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+                  className="h-9 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs font-semibold text-slate-650 focus:outline-none"
                   value={auditTable.query.filters.action ?? ""}
                   onChange={(event) => auditTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, action: event.target.value || undefined } }))}
                 >
@@ -2386,7 +2621,7 @@ export function AuditPage() {
                   <option value="EXPORT_CSV">EXPORT_CSV</option>
                 </select>
                 <select
-                  className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+                  className="h-9 rounded-sm border border-[#E5E7EB] bg-white px-2.5 text-xs font-semibold text-slate-650 focus:outline-none"
                   value={auditTable.query.filters.entity ?? ""}
                   onChange={(event) => auditTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, entity: event.target.value || undefined } }))}
                 >
@@ -2402,13 +2637,13 @@ export function AuditPage() {
                   type="date"
                   value={auditTable.query.filters.from ?? ""}
                   onChange={(event) => auditTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, from: event.target.value || undefined } }))}
-                  className="h-9 text-xs bg-white border border-slate-200 rounded-lg"
+                  className="h-9 text-xs bg-white border border-[#E5E7EB] rounded-sm shadow-none focus-visible:ring-0"
                 />
                 <Input
                   type="date"
                   value={auditTable.query.filters.to ?? ""}
                   onChange={(event) => auditTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, to: event.target.value || undefined } }))}
-                  className="h-9 text-xs bg-white border border-slate-200 rounded-lg"
+                  className="h-9 text-xs bg-white border border-[#E5E7EB] rounded-sm shadow-none focus-visible:ring-0"
                 />
               </>
             }
@@ -2416,43 +2651,46 @@ export function AuditPage() {
         </Card>
       </div>
 
-      {/* RAW JSON DETAILS INSPECTOR MODAL POPUP */}
+      {/* RAW JSON DETAILS INSPECTOR DRAWER */}
       {selectedLog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-[1px]">
-          <div className="w-full max-w-2xl rounded-xl bg-white border shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <header className="bg-[#032f67] p-4 text-white flex justify-between items-center">
-              <h3 className="text-sm font-bold uppercase flex items-center gap-2"><ShieldAlert className="size-4" /> Audit Metadata Inspector</h3>
-              <button onClick={() => setSelectedLog(null)} className="text-white hover:text-slate-200 font-extrabold text-sm px-2 py-1">✕</button>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setSelectedLog(null)} />
+          <div className="relative w-full max-w-xl bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-[#E5E7EB] p-4">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <ShieldAlert className="size-4" /> Audit Metadata Inspector
+              </h3>
+              <button onClick={() => setSelectedLog(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
             </header>
-            <div className="p-5 flex flex-col gap-4 text-xs text-left max-h-[80vh] overflow-y-auto">
-              <div className="grid gap-3 sm:grid-cols-2 bg-slate-50 p-3 rounded-lg border">
+            <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto text-xs text-left">
+              <div className="grid gap-3 sm:grid-cols-2 bg-[#FAFAFA] p-3 rounded-sm border border-[#E5E7EB]">
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[9px]">Triggered Path</p>
+                  <p className="text-slate-400 font-bold uppercase text-[9px]">Triggered Path</p>
                   <p className="font-mono text-slate-800 mt-0.5">[{selectedLog.details?.method || "WRITE"}] {selectedLog.details?.path || "N/A"}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[9px]">HTTP Status Code</p>
+                  <p className="text-slate-400 font-bold uppercase text-[9px]">HTTP Status Code</p>
                   <p className="font-bold text-emerald-600 mt-0.5">{selectedLog.details?.statusCode || "200 SUCCESS"}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[9px]">Target Resource Entity</p>
+                  <p className="text-slate-400 font-bold uppercase text-[9px]">Target Resource Entity</p>
                   <p className="font-bold text-slate-700 mt-0.5">{selectedLog.entity} (ID: {selectedLog.entityId || "N/A"})</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[9px]">Network IP Address</p>
+                  <p className="text-slate-400 font-bold uppercase text-[9px]">Network IP Address</p>
                   <p className="font-mono text-slate-700 mt-0.5">{selectedLog.ipAddress || "Internal Loop"}</p>
                 </div>
               </div>
 
-              <div>
-                <p className="text-slate-400 font-semibold uppercase text-[9px] mb-1.5">Action JSON Payload details</p>
-                <pre className="bg-slate-900 text-emerald-400 rounded-xl p-4 overflow-auto max-h-[300px] text-xs font-mono border shadow-inner leading-relaxed">
+              <div className="flex-1 flex flex-col min-h-0">
+                <p className="text-slate-400 font-bold uppercase text-[9px] mb-1.5">Action JSON Payload details</p>
+                <pre className="flex-1 bg-slate-950 text-emerald-400 rounded-sm p-4 overflow-auto text-[11px] font-mono border border-slate-800 leading-relaxed shadow-none">
                   {JSON.stringify(selectedLog.details?.payload || selectedLog.details || {}, null, 2)}
                 </pre>
               </div>
 
-              <div className="flex justify-end gap-2 border-t pt-4 mt-1">
-                <Button type="button" onClick={() => setSelectedLog(null)} className="bg-[#032f67] text-white">Close Details</Button>
+              <div className="flex justify-end gap-2 border-t border-[#E5E7EB] pt-4 mt-auto">
+                <Button type="button" onClick={() => setSelectedLog(null)} className="bg-[#002652] hover:bg-[#001b3a] text-xs">Close Details</Button>
               </div>
             </div>
           </div>

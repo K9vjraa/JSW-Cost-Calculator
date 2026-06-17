@@ -1,0 +1,5 @@
+id,userId,title,message,category,priority,readAt
+notif-1,user-admin,Price master refreshed,Nickel price list is active for May 2026.,PRICE,HIGH,
+notif-2,user-proc,Calculation completed,BATCH-1023 is ready for report export.,CALCULATION,MEDIUM,
+notif-3,user-fin,Report generated,Monthly Cost Summary for May 2026 is available.,REPORT,MEDIUM,
+notif-4,,System maintenance,Scheduled backup at 02:00 IST. No downtime expected.,SYSTEM,LOW,

@@ -74,7 +74,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         score,
         onClick: () => {
           addSearch(debouncedQuery || m.name);
-          navigate("/masters");
+          navigate("/material-master");
           onClose();
         }
       });
@@ -91,7 +91,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         score,
         onClick: () => {
           addSearch(debouncedQuery || g.name);
-          navigate("/masters");
+          navigate("/grade-builder");
           onClose();
         }
       });
@@ -142,7 +142,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
         score,
         onClick: () => {
           addSearch(debouncedQuery || u.name);
-          navigate("/settings"); // Admin user management setting panel
+          navigate("/user-management"); // Admin user management setting panel
           onClose();
         }
       });

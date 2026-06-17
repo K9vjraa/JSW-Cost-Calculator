@@ -1,0 +1,4 @@
+id,userId,action,entity,entityId,ipAddress,details
+audit-1,user-admin,SEED_PRICE,PriceList,SUP-JSW-01,127.0.0.1,"{""message"":""Seed price master created""}"
+audit-2,user-proc,COMPLETE,Calculation,calc-1,127.0.0.1,"{""batchId"":""BATCH-1023""}"
+audit-3,user-admin,CREATE,User,user-std,127.0.0.1,"{""email"":""employee@jsw-mcms.local"",""role"":""EMPLOYEE""}"

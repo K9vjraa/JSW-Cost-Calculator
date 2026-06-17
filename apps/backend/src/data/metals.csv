@@ -1,0 +1,8 @@
+id,name,code,category,unit,status,description
+metal-ss,Stainless Steel,MTL-SS,Ferrous,kg,ACTIVE,Austenitic stainless steel family with high corrosion resistance
+metal-fe,Iron,MTL-FE,Ferrous,kg,ACTIVE,Primary iron base metal for structural applications
+metal-as,Alloy Steel,MTL-AS,Alloy,kg,ACTIVE,Chrome-moly and vanadium alloy steels for high-strength applications
+metal-cs,Carbon Steel,MTL-CS,Ferrous,kg,ACTIVE,Plain carbon steel grades for general structural and automotive use
+metal-cu,Copper,MTL-CU,Non-Ferrous,kg,ACTIVE,Pure copper for electrical and thermal conductivity applications
+metal-al,Aluminum,MTL-AL,Non-Ferrous,kg,ACTIVE,Lightweight and corrosion-resistant aluminum for structural and cladding sheets
+metal-zn,Zinc,MTL-ZN,Non-Ferrous,kg,ACTIVE,Zinc metal for galvanization lines and protective coating layers

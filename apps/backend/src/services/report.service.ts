@@ -14,7 +14,7 @@ export async function listReports(query: ReportQueryInput, userId: string, role:
 export async function getReport(id: string, userId: string, role: string) {
   const row = await reportRepo.findReportById(id);
   if (!row) throw new ApiError(404, "Report not found.");
-  if (role === "USER" && row.generatedById !== userId) throw new ApiError(403, "Access denied.");
+  if (role === "PDQC" && row.generatedById !== userId) throw new ApiError(403, "Access denied.");
   return row;
 }
 
@@ -43,7 +43,7 @@ export async function createReport(
 export async function deleteReport(id: string, actorId: string, role: string, ip?: string) {
   const row = await reportRepo.findReportById(id);
   if (!row) throw new ApiError(404, "Report not found.");
-  if (role !== "ADMIN" && row.generatedById !== actorId) {
+  if (role !== "COSTING_DEPARTMENT" && row.generatedById !== actorId) {
     throw new ApiError(403, "You can only delete reports you generated.");
   }
   await reportRepo.deleteReport(id);

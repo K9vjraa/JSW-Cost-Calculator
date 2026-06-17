@@ -6,29 +6,29 @@
 
 services:
 
-  # ─── PostgreSQL (local dev only — use Neon in production) ─────────────────
-  db:
-    image: postgres:16-alpine
-    container_name: mcms-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: mcms
-      POSTGRES_USER: mcms
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcms_local_secret}
-    ports:
-      - "5432:5432"
-    volumes:
-      - mcms-postgres:/var/lib/postgresql/data
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mcms -d mcms"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
-    networks:
-      - mcms-internal
-    profiles: ["local", "full"]
+#  # ─── PostgreSQL (local dev only — use Neon in production) ─────────────────
+#  db:
+#    image: postgres:16-alpine
+#    container_name: mcms-db
+#    restart: unless-stopped
+#    environment:
+#      POSTGRES_DB: mcms
+#      POSTGRES_USER: mcms
+#      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcms_local_secret}
+#    ports:
+#      - "5432:5432"
+#    volumes:
+#      - mcms-postgres:/var/lib/postgresql/data
+#      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+#    healthcheck:
+#      test: ["CMD-SHELL", "pg_isready -U mcms -d mcms"]
+#      interval: 5s
+#      timeout: 5s
+#      retries: 20
+#      start_period: 10s
+#    networks:
+#      - mcms-internal
+#    profiles: ["local", "full"]
 
   # ─── Backend API ──────────────────────────────────────────────────────────
   api:
@@ -41,16 +41,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: ${DATABASE_URL:-postgresql://mcms:mcms_local_secret@db:5432/mcms?schema=public&sslmode=disable&connection_limit=10}
+      DATABASE_URL: ${DATABASE_URL}
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-15m}
       REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
       CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:5173}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-    depends_on:
-      db:
-        condition: service_healthy
+#    depends_on:
+#      db:
+#        condition: service_healthy
     ports:
       - "4000:4000"
     command: >
@@ -104,9 +104,9 @@ services:
       - mcms-public
     profiles: ["local", "full", "frontend"]
 
-volumes:
-  mcms-postgres:
-    driver: local
+#volumes:
+#  mcms-postgres:
+#    driver: local
 
 networks:
   mcms-internal:

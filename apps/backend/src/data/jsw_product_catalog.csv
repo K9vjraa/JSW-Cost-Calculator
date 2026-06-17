@@ -1,0 +1,26 @@
+category,steelType,grade,subGrade,image,basePrice
+MS Hot Rolled,HR Coil E250A,E250A,Standard,coil,63.7500
+MS Hot Rolled,HR Coil E250A,E275,L,coil,63.7500
+MS Hot Rolled,HR Sheet,E350,Standard,sheet,65.2000
+MS Hot Rolled,HR Sheet,E410,Standard,sheet,65.2000
+MS Hot Rolled,HR Plate,E250,Standard,plate,67.5000
+MS Hot Rolled,HR Plate,E350,Standard,plate,67.5000
+MS Cold Rolled,CR Coil,D,Standard,coil,68.4000
+MS Cold Rolled,CR Coil,DD,Standard,coil,68.4000
+MS Cold Rolled,CR Coil,EDD,Standard,coil,68.4000
+MS Cold Rolled,CR Sheet,D,Standard,sheet,70.1000
+MS Cold Rolled,CR Sheet,DD,Standard,sheet,70.1000
+TMT,TMT Fe500D,Fe500D,Standard,bar,58.9000
+TMT,TMT Fe550D,Fe550D,Standard,bar,60.3000
+TMT,TMT Fe600,Fe600,Standard,bar,62.1000
+Coated Steel,Galvanized Coil,GP,Standard,coil,72.8000
+Coated Steel,Galvanized Coil,GC,Standard,coil,72.8000
+Coated Steel,Galvalume Sheet,GL,Standard,sheet,74.5000
+Wire Rods,MS Wire Rod,SAE1006,Standard,rod,61.2000
+Wire Rods,MS Wire Rod,SAE1008,Standard,rod,61.2000
+Wire Rods,Carbon Steel Wire Rod,EN8D,Standard,rod,64.6000
+Wire Rods,Carbon Steel Wire Rod,EN9,Standard,rod,64.6000
+Structural Steel,MS Angle,E250,Standard,angle,66.8000
+Structural Steel,MS Channel,E250,Standard,channel,67.9000
+Structural Steel,H-Beam,E250,Standard,beam,71.4000
+Structural Steel,H-Beam,E350,Standard,beam,71.4000

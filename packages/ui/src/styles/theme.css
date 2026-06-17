@@ -7,26 +7,26 @@
 
 @theme {
   /* JSW Corporate Colors */
-  --color-jsw-corp: #032f67;
-  --color-jsw-blue: #0057b8;
-  --color-jsw-accent: #0b63c8;
-  --color-jsw-light-bg: #e8f0fb;
-  --color-jsw-text-dark: #063d83;
+  --color-jsw-corp: #002652;
+  --color-jsw-blue: #003b7a;
+  --color-jsw-accent: #d97706;
+  --color-jsw-light-bg: #f9f9ff;
+  --color-jsw-text-dark: #141b2b;
 
   /* Industrial Accent Colors & Glowing Backgrounds */
   --color-success-fg: #087443;
   --color-success-bg: #e8fbf0;
   --color-success-border: #bde4cf;
 
-  --color-danger-fg: #d63031;
-  --color-danger-bg: #fdf0f0;
-  --color-danger-border: #f9cccc;
+  --color-danger-fg: #ba1a1a;
+  --color-danger-bg: #ffdad6;
+  --color-danger-border: #ffdad6;
 
   --color-warning-fg: #f2994a;
   --color-warning-bg: #fef5ec;
   --color-warning-border: #fdd9b5;
 
-  --color-info-fg: #0057b8;
+  --color-info-fg: #003b7a;
   --color-info-bg: #edf5ff;
   --color-info-border: #bfd6f5;
 
@@ -40,10 +40,10 @@
   --spacing-grid-xxl: 32px;
 
   /* Industrial Radius Tokens */
-  --radius-xs: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-xs: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
 }
 
 /* ----------------------------------------------------

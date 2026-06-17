@@ -8,7 +8,7 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn("rounded-2xl border border-[#d6dfeb] bg-white text-[#10233d] shadow-xs overflow-hidden", className)}
+      className={cn("rounded-md border border-[#e5e7eb] bg-white text-[#111827] overflow-hidden", className)}
       {...props}
     />
   )
@@ -17,33 +17,33 @@ Card.displayName = "Card";
 
 export const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex flex-col gap-1.5 p-5 border-b border-[#d6dfeb]/50", className)} {...props} />
+    <div ref={ref} className={cn("flex flex-col gap-1 p-4 border-b border-[#e5e7eb]", className)} {...props} />
   )
 );
 CardHeader.displayName = "CardHeader";
 
 export const CardTitle = React.forwardRef<HTMLHeadingElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("text-sm font-bold uppercase tracking-wider text-[#10233d] m-0", className)} {...props} />
+    <h3 ref={ref} className={cn("text-xs font-semibold uppercase tracking-wider text-[#111827] m-0", className)} {...props} />
   )
 );
 CardTitle.displayName = "CardTitle";
 
 export const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => (
-    <p ref={ref} className={cn("text-xs text-[#56657a] font-medium m-0", className)} {...props} />
+    <p ref={ref} className={cn("text-xs text-[#6b7280] font-normal m-0", className)} {...props} />
   )
 );
 CardDescription.displayName = "CardDescription";
 
 export const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} className={cn("p-5", className)} {...props} />
+  ({ className, ...props }, ref) => <div ref={ref} className={cn("p-4", className)} {...props} />
 );
 CardContent.displayName = "CardContent";
 
 export const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex items-center justify-between p-4 bg-slate-50/50 border-t border-[#d6dfeb]/50", className)} {...props} />
+    <div ref={ref} className={cn("flex items-center justify-between p-3.5 bg-slate-50/50 border-t border-[#e5e7eb]", className)} {...props} />
   )
 );
 CardFooter.displayName = "CardFooter";
@@ -65,28 +65,28 @@ export interface KPICardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export function KPICard({ title, value, trend, icon, isLocked, className, ...props }: KPICardProps) {
   return (
-    <Card className={cn("relative p-5 flex flex-col justify-between hover:shadow-md transition-shadow", className)} {...props}>
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-[#56657a]">{title}</span>
-        {icon && <div className="text-[#0057b8] flex items-center justify-center p-1.5 bg-[#edf5ff] rounded-lg size-8">{icon}</div>}
+    <Card className={cn("relative p-4 flex flex-col justify-between hover:border-slate-400 transition-colors", className)} {...props}>
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <span className="text-[10px] font-medium uppercase tracking-widest text-[#6b7280]">{title}</span>
+        {icon && <div className="text-slate-400 flex items-center justify-center size-5">{icon}</div>}
       </div>
 
-      <div className="flex flex-col gap-1">
-        <span className="text-2xl font-black text-[#10233d] tracking-tight">{value}</span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xl font-semibold text-[#111827] tracking-tight">{value}</span>
         
         {(trend || isLocked) && (
-          <div className="flex items-center justify-between text-[10px] font-bold mt-1.5 border-t border-slate-100 pt-1.5">
+          <div className="flex items-center justify-between text-[10px] font-semibold mt-1.5 border-t border-slate-100 pt-1.5">
             {trend ? (
-              <span className={cn("flex items-center gap-0.5", trend.isPositive ? "text-[#087443]" : "text-[#d63031]")}>
+              <span className={cn("flex items-center gap-0.5", trend.isPositive ? "text-[#16a34a]" : "text-[#dc2626]")}>
                 {trend.isPositive ? "▲" : "▼"} {trend.value}
-                {trend.label && <span className="text-slate-400 font-medium ml-1">({trend.label})</span>}
+                {trend.label && <span className="text-slate-400 font-normal ml-1">({trend.label})</span>}
               </span>
             ) : (
               <span />
             )}
             
             {isLocked && (
-              <span className="flex items-center gap-0.5 text-[#063d83] bg-[#edf5ff] px-1.5 py-0.5 rounded uppercase font-extrabold text-[8px]">
+              <span className="flex items-center gap-0.5 text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded uppercase font-bold text-[8px] border border-slate-200">
                 🔒 Locked
               </span>
             )}
@@ -110,38 +110,31 @@ export interface AlertCardProps extends React.HTMLAttributes<HTMLDivElement> {
 export function AlertCard({ variant = "info", title, description, action, className, ...props }: AlertCardProps) {
   const styles = {
     info: {
-      card: "border-[#bfd6f5] bg-[#edf5ff] text-[#063d83]",
-      bullet: "bg-[#0057b8]"
+      card: "border-slate-200 bg-slate-50 text-slate-700",
     },
     success: {
       card: "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]",
-      bullet: "bg-[#087443]"
     },
     warning: {
-      card: "border-[#fdd9b5] bg-[#fef5ec] text-[#f2994a]",
-      bullet: "bg-[#f2994a]"
+      card: "border-[#fdd9b5] bg-[#fef5ec] text-[#d97706]",
     },
     error: {
-      card: "border-[#f9cccc] bg-[#fdf0f0] text-[#d63031]",
-      bullet: "bg-[#d63031]"
+      card: "border-[#ffdad6] bg-[#ffdad6] text-[#ba1a1a]",
     }
   }[variant];
 
   return (
     <div
       className={cn(
-        "rounded-xl border p-4 shadow-xs relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 text-left",
+        "rounded-md border p-4 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 text-left",
         styles.card,
         className
       )}
       {...props}
     >
-      {/* Decorative vertical band */}
-      <div className={cn("absolute left-0 top-0 bottom-0 w-1", styles.bullet)} />
-
-      <div className="flex flex-col gap-0.5 pl-2 max-w-xl">
-        <strong className="text-xs uppercase font-extrabold tracking-wider">{title}</strong>
-        <p className="text-[11px] font-semibold opacity-90 leading-relaxed">{description}</p>
+      <div className="flex flex-col gap-0.5 max-w-xl">
+        <strong className="text-xs uppercase font-semibold tracking-wider">{title}</strong>
+        <p className="text-[11px] font-normal opacity-90 leading-relaxed">{description}</p>
       </div>
 
       {action && <div className="flex items-center shrink-0 pr-1">{action}</div>}

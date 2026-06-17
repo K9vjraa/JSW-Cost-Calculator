@@ -1,4 +1,4 @@
-export type RoleName = "ADMIN" | "EMPLOYEE" | "USER";
+export type RoleName = "COSTING_DEPARTMENT" | "PDQC";
 
 export type Actor = {
   id: string;

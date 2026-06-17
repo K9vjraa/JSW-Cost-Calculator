@@ -21,7 +21,6 @@ export const QK = {
   metals: (search?: string) => ["metals", search ?? ""] as const,
   grades: (metalId?: string) => ["grades", metalId ?? ""] as const,
   rawMaterials: ["rawMaterials"] as const,
-  suppliers: ["suppliers"] as const,
   prices: (metalId?: string) => ["prices", metalId ?? ""] as const,
   priceHistory: ["priceHistory"] as const,
   alloys: ["alloys"] as const,
@@ -119,17 +118,6 @@ export function useAlloys() {
       return data.data;
     },
     staleTime: 3 * 60_000
-  });
-}
-
-export function useSuppliers() {
-  return useQuery({
-    queryKey: QK.suppliers,
-    queryFn: async () => {
-      const { data } = await api.get<{ data: unknown[] }>("/suppliers", { params: { limit: 100 } });
-      return data.data;
-    },
-    staleTime: 5 * 60_000
   });
 }
 

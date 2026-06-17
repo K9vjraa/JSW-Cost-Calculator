@@ -30,20 +30,13 @@ const features = [
   {
     icon: ShieldCheck,
     label: "Role-Based Access",
-    description: "Admin, Employee, and User access tiers"
+    description: "Costing Department & PDQC access tiers"
   },
   {
     icon: LockKeyhole,
     label: "Fully Audited",
     description: "Every calculation and price change is logged"
   }
-];
-
-// ── Demo credential shortcuts ─────────────────────────────────────────────────
-const demoRoles = [
-  { label: "Admin", email: "admin@jsw-mcms.local", color: "#d63031" },
-  { label: "Employee", email: "procurement@jsw-mcms.local", color: "#0057b8" },
-  { label: "User", email: "user@jsw-mcms.local", color: "#087443" }
 ];
 
 export function LoginPage() {
@@ -53,19 +46,18 @@ export function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting }
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: "procurement@jsw-mcms.local",
-      password: "MCMS@2026",
+      email: "",
+      password: "",
       rememberMe: false
     }
   });
 
   if (actor) {
-    return <Navigate to={actor.role === "USER" ? "/workspace" : "/dashboard"} replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   const busy = isSubmitting || isLoading;
@@ -75,7 +67,7 @@ export function LoginPage() {
     try {
       const next = await login(values.email, values.password, values.rememberMe);
       toast.success(`Welcome, ${next.name}`, { description: `Logged in as ${next.role}` });
-      navigate(next.role === "USER" ? "/workspace" : "/dashboard");
+      navigate("/dashboard");
     } catch {
       // Error is already in store; toast handled below via `error` field
     }
@@ -146,36 +138,7 @@ export function LoginPage() {
             </p>
           </div>
 
-          {/* Demo shortcuts */}
-          <div>
-            <p className="mb-2 text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-              Quick Demo Login
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {demoRoles.map((r) => (
-                <button
-                  key={r.label}
-                  type="button"
-                  onClick={() => {
-                    setValue("email", r.email);
-                    setValue("password", "MCMS@2026");
-                    clearError();
-                  }}
-                  className="rounded-lg border px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider transition-all hover:shadow-sm cursor-pointer"
-                  style={{
-                    color: r.color,
-                    borderColor: `${r.color}40`,
-                    background: `${r.color}08`
-                  }}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[10px] text-slate-400">
-              Demo password: <span className="font-mono font-bold text-slate-600">MCMS@2026</span>
-            </p>
-          </div>
+
 
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5" id="mcms-login-form" noValidate>

@@ -138,7 +138,7 @@ async function tableExportRows(resource: keyof typeof tableSortFields, req: any)
     const range = dateRange(req.query);
     const where = {
       ...(ids ? { id: { in: ids } } : {}),
-      ...(req.actor!.role === "USER" ? { userId: req.actor!.id } : {}),
+      ...(req.actor!.role === "PDQC" ? { userId: req.actor!.id } : {}),
       ...(query.status ? { status: query.status as any } : {}),
       ...(query.mode ? { mode: query.mode } : {}),
       ...(query.search ? { OR: [{ batchId: { contains: query.search, mode: "insensitive" as const } }, { name: { contains: query.search, mode: "insensitive" as const } }] } : {}),
@@ -157,7 +157,7 @@ async function tableExportRows(resource: keyof typeof tableSortFields, req: any)
       ...(ids ? { id: { in: ids } } : {}),
       ...(query.type ? { type: query.type } : {}),
       ...(query.search ? { name: { contains: query.search, mode: "insensitive" as const } } : {}),
-      ...(req.actor!.role === "USER" ? { generatedById: req.actor!.id } : {})
+      ...(req.actor!.role === "PDQC" ? { generatedById: req.actor!.id } : {})
     };
     const rows = await prisma.report.findMany({ where, include: { generatedBy: { select: { name: true } } }, orderBy: sort.orderBy, take });
     return {
@@ -168,7 +168,7 @@ async function tableExportRows(resource: keyof typeof tableSortFields, req: any)
   }
 
   if (resource === "users") {
-    if (req.actor!.role !== "ADMIN") throw new ApiError(403, "Access denied.");
+    if (req.actor!.role !== "COSTING_DEPARTMENT") throw new ApiError(403, "Access denied.");
     const where = {
       ...(ids ? { id: { in: ids } } : {}),
       ...(query.status ? { status: query.status } : {}),
@@ -183,7 +183,7 @@ async function tableExportRows(resource: keyof typeof tableSortFields, req: any)
   }
 
   if (resource === "audit-logs") {
-    if (!["ADMIN", "EMPLOYEE"].includes(req.actor!.role)) throw new ApiError(403, "Access denied.");
+    if (req.actor!.role !== "COSTING_DEPARTMENT") throw new ApiError(403, "Access denied.");
     const range = dateRange(req.query);
     const where = {
       ...(ids ? { id: { in: ids } } : {}),
@@ -216,7 +216,7 @@ async function tableExportRows(resource: keyof typeof tableSortFields, req: any)
 
 exportRoutes.get(
   "/table/:resource",
-  allowRoles("ADMIN", "EMPLOYEE", "USER"),
+  allowRoles("COSTING_DEPARTMENT", "PDQC"),
   asyncRoute(async (req, res) => {
     const resource = String(req.params.resource) as keyof typeof tableSortFields;
     if (!(resource in tableSortFields)) throw new ApiError(404, "Export resource not found.");
@@ -275,8 +275,7 @@ exportRoutes.get(
     });
     if (!calculation) throw new ApiError(404, "Calculation not found.");
     if (
-      req.actor!.role !== "ADMIN" &&
-      req.actor!.role !== "EMPLOYEE" &&
+      req.actor!.role !== "COSTING_DEPARTMENT" &&
       calculation.userId !== req.actor!.id
     ) {
       throw new ApiError(403, "Access denied.");
@@ -581,7 +580,7 @@ exportRoutes.get(
   asyncRoute(async (req, res) => {
     const { from, to, status } = req.query as Record<string, string | undefined>;
     const where = {
-      ...(req.actor!.role === "USER" ? { userId: req.actor!.id } : {}),
+      ...(req.actor!.role === "PDQC" ? { userId: req.actor!.id } : {}),
       ...(status ? { status: status as any } : {}),
       ...(from || to
         ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } }

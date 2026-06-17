@@ -12,37 +12,37 @@ export const masterRoutes = Router();
 
 // ── Metals ────────────────────────────────────────────────────────────────────
 masterRoutes.get("/metals", metalCtrl.listMetals);
-masterRoutes.post("/metals", allowRoles("ADMIN"), metalCtrl.createMetal);
-masterRoutes.put("/metals/:id", allowRoles("ADMIN"), metalCtrl.updateMetal);
-masterRoutes.delete("/metals/:id", allowRoles("ADMIN"), metalCtrl.deactivateMetal);
+masterRoutes.post("/metals", allowRoles("COSTING_DEPARTMENT"), metalCtrl.createMetal);
+masterRoutes.put("/metals/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.updateMetal);
+masterRoutes.delete("/metals/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.deactivateMetal);
 
 // ── Grades ────────────────────────────────────────────────────────────────────
 masterRoutes.get("/grades", gradeCtrl.listGrades);
-masterRoutes.post("/grades", allowRoles("ADMIN"), gradeCtrl.createGrade);
-masterRoutes.put("/grades/:id", allowRoles("ADMIN"), gradeCtrl.updateGrade);
-masterRoutes.delete("/grades/:id", allowRoles("ADMIN"), gradeCtrl.deactivateGrade);
+masterRoutes.post("/grades", allowRoles("COSTING_DEPARTMENT"), gradeCtrl.createGrade);
+masterRoutes.put("/grades/:id", allowRoles("COSTING_DEPARTMENT"), gradeCtrl.updateGrade);
+masterRoutes.delete("/grades/:id", allowRoles("COSTING_DEPARTMENT"), gradeCtrl.deactivateGrade);
 
 // ── Raw Materials ─────────────────────────────────────────────────────────────
 masterRoutes.get("/raw-materials", metalCtrl.listRawMaterials);
-masterRoutes.post("/raw-materials", allowRoles("ADMIN"), metalCtrl.createRawMaterial);
-masterRoutes.put("/raw-materials/:id", allowRoles("ADMIN"), metalCtrl.updateRawMaterial);
-masterRoutes.delete("/raw-materials/:id", allowRoles("ADMIN"), metalCtrl.deactivateRawMaterial);
+masterRoutes.post("/raw-materials", allowRoles("COSTING_DEPARTMENT"), metalCtrl.createRawMaterial);
+masterRoutes.put("/raw-materials/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.updateRawMaterial);
+masterRoutes.delete("/raw-materials/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.deactivateRawMaterial);
 
 // ── Suppliers ─────────────────────────────────────────────────────────────────
 masterRoutes.get("/suppliers", metalCtrl.listSuppliers);
-masterRoutes.post("/suppliers", allowRoles("ADMIN"), metalCtrl.createSupplier);
-masterRoutes.put("/suppliers/:id", allowRoles("ADMIN"), metalCtrl.updateSupplier);
-masterRoutes.delete("/suppliers/:id", allowRoles("ADMIN"), metalCtrl.deactivateSupplier);
+masterRoutes.post("/suppliers", allowRoles("COSTING_DEPARTMENT"), metalCtrl.createSupplier);
+masterRoutes.put("/suppliers/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.updateSupplier);
+masterRoutes.delete("/suppliers/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.deactivateSupplier);
 
 // ── Price List ────────────────────────────────────────────────────────────────
 masterRoutes.get("/prices", metalCtrl.listPrices);
-masterRoutes.post("/prices", allowRoles("ADMIN"), metalCtrl.createPrice);
-masterRoutes.put("/prices/:id", allowRoles("ADMIN"), metalCtrl.updatePrice);
-masterRoutes.delete("/prices/:id", allowRoles("ADMIN"), metalCtrl.deactivatePrice);
+masterRoutes.post("/prices", allowRoles("COSTING_DEPARTMENT"), metalCtrl.createPrice);
+masterRoutes.put("/prices/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.updatePrice);
+masterRoutes.delete("/prices/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.deactivatePrice);
 masterRoutes.get("/price-history", metalCtrl.listPriceHistory);
 
 // ── Alloys ────────────────────────────────────────────────────────────────────
 masterRoutes.get("/alloys", metalCtrl.listAlloys);
-masterRoutes.post("/alloys", allowRoles("ADMIN", "EMPLOYEE"), metalCtrl.createAlloy);
-masterRoutes.put("/alloys/:id", allowRoles("ADMIN", "EMPLOYEE"), metalCtrl.updateAlloy);
-masterRoutes.delete("/alloys/:id", allowRoles("ADMIN"), metalCtrl.deactivateAlloy);
+masterRoutes.post("/alloys", allowRoles("COSTING_DEPARTMENT", "PDQC"), metalCtrl.createAlloy);
+masterRoutes.put("/alloys/:id", allowRoles("COSTING_DEPARTMENT", "PDQC"), metalCtrl.updateAlloy);
+masterRoutes.delete("/alloys/:id", allowRoles("COSTING_DEPARTMENT"), metalCtrl.deactivateAlloy);

@@ -1,0 +1,11 @@
+id,gradeId,gradeName,uts,yieldStrength,elongation,hardness,thicknessTolerance,widthTolerance,flatnessTolerance,minBendRadius,bendRating,springback
+mech-1,grade-304,SS304,515 MPa,205 MPa,45%,HRB 80,+/- 0.10 mm,+/- 3 mm,Standard IS:513,2.0T,Good,Moderate
+mech-2,grade-316,SS316,580 MPa,290 MPa,40%,HRB 95,+/- 0.08 mm,+/- 2 mm,Tight IS:513,2.2T,Good,Moderate
+mech-3,grade-316l,SS316L,570 MPa,270 MPa,40%,HRB 90,+/- 0.08 mm,+/- 2 mm,Tight IS:513,2.0T,Excellent,Low
+mech-4,grade-low-alloy,Low Alloy,700 MPa,420 MPa,25%,HRB 95,+/- 0.12 mm,+/- 4 mm,Standard,1.8T,Excellent,Low
+mech-5,grade-high-alloy,High Alloy,850 MPa,560 MPa,18%,HRC 28,+/- 0.10 mm,+/- 3 mm,Precision,2.5T,Good,High
+mech-6,grade-carbon-low,Low Carbon,420 MPa,260 MPa,30%,HRB 75,+/- 0.15 mm,+/- 5 mm,Standard IS:1079,1.5T,Very Good,Low
+mech-7,grade-carbon-medium,Medium Carbon,600 MPa,390 MPa,20%,HRB 88,+/- 0.12 mm,+/- 4 mm,Standard IS:1079,2.0T,Good,Moderate
+mech-8,grade-al6061,Al6061,310 MPa,276 MPa,12%,HB 95,+/- 0.08 mm,+/- 2 mm,Standard,3.0T,Fair,High
+mech-9,grade-al5052,Al5052,228 MPa,193 MPa,12%,HB 60,+/- 0.05 mm,+/- 1.5 mm,Tight,1.5T,Excellent,Moderate
+mech-10,grade-zn-galv,Zn-Galv,140 MPa,90 MPa,35%,HB 45,+/- 0.02 mm,+/- 1 mm,Flat,1.0T,Excellent,Very Low

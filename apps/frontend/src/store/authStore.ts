@@ -14,9 +14,8 @@ export interface AuthState {
 
 // Helper to determine role from email in offline demo mode
 const roleFromEmail = (email: string): Actor["role"] => {
-  if (email.includes("admin")) return "ADMIN";
-  if (email.includes("procurement") || email.includes("finance") || email.includes("production") || email.includes("employee")) return "EMPLOYEE";
-  return "USER";
+  if (email.includes("admin") || email.includes("cost")) return "COSTING_DEPARTMENT";
+  return "PDQC";
 };
 
 // ── Persistent Zustand Store ──────────────────────────────────────────────────
@@ -41,8 +40,8 @@ export const useAuthStore = create<AuthState>()(
               id: `demo-${role.toLowerCase()}`,
               email,
               role,
-              name: role === "EMPLOYEE" ? "Rahul Sharma" : role === "ADMIN" ? "Admin User" : "Standard User",
-              department: role
+              name: role === "COSTING_DEPARTMENT" ? "Costing Admin" : "PDQC Specialist",
+              department: role === "COSTING_DEPARTMENT" ? "Costing" : "PDQC"
             };
             set({ actor: demoActor, isLoading: false });
             return demoActor;

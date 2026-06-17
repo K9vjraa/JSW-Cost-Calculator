@@ -21,7 +21,7 @@ export async function listCalculations(query: CalculationQueryInput, userId: str
     "desc"
   );
 
-  const baseWhere = role === "ADMIN" || role === "EMPLOYEE" ? {} : { userId };
+  const baseWhere = role === "COSTING_DEPARTMENT" ? {} : { userId };
 
   const where = {
     ...baseWhere,
