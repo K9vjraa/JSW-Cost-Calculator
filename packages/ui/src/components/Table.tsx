@@ -47,7 +47,7 @@ export const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttr
     <th
       ref={ref}
       className={cn(
-        "h-9.5 px-4 text-left align-middle font-bold text-[#56657a] uppercase tracking-wider text-[10px] [&:has([role=checkbox])]:pr-0",
+        "h-8 px-3 text-left align-middle font-bold text-[#56657a] uppercase tracking-wider text-[10px] [&:has([role=checkbox])]:pr-0",
         className
       )}
       {...props}
@@ -60,7 +60,7 @@ export const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttr
   ({ className, ...props }, ref) => (
     <td
       ref={ref}
-      className={cn("py-2.5 px-4 align-middle text-[#10233d] font-semibold [&:has([role=checkbox])]:pr-0", className)}
+      className={cn("py-1.5 px-3 align-middle text-[#10233d] font-semibold [&:has([role=checkbox])]:pr-0", className)}
       {...props}
     />
   )

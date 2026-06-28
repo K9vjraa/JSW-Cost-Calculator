@@ -171,14 +171,13 @@ async function tableExportRows(resource: keyof typeof tableSortFields, req: any)
     if (req.actor!.role !== "COSTING_DEPARTMENT") throw new ApiError(403, "Access denied.");
     const where = {
       ...(ids ? { id: { in: ids } } : {}),
-      ...(query.status ? { status: query.status } : {}),
-      ...(query.search ? { OR: [{ name: { contains: query.search, mode: "insensitive" as const } }, { email: { contains: query.search, mode: "insensitive" as const } }, { department: { contains: query.search, mode: "insensitive" as const } }] } : {})
+      ...(query.search ? { OR: [{ name: { contains: query.search, mode: "insensitive" as const } }, { email: { contains: query.search, mode: "insensitive" as const } }] } : {})
     };
-    const rows = await prisma.user.findMany({ where, include: { role: true }, orderBy: sort.orderBy, take });
+    const rows = await prisma.user.findMany({ where, orderBy: sort.orderBy, take });
     return {
       entity: "User",
-      headers: ["Name", "Email", "Department", "Role", "Status", "Last Login"],
-      rows: rows.map((row) => [row.name, row.email, row.department ?? "", row.role.name, row.status, row.lastLoginAt?.toISOString() ?? ""])
+      headers: ["Name", "Email", "Department", "Role", "Created At"],
+      rows: rows.map((row) => [row.name, row.email, row.department ?? "", row.role, row.createdAt?.toISOString() ?? ""])
     };
   }
 
@@ -324,9 +323,9 @@ exportRoutes.get(
     calculation.items.forEach((item) => {
       doc.text(item.itemName, 42, doc.y, { width: 200, continued: true });
       doc.text(Number(item.quantity).toFixed(2), 242, doc.y, { width: 70, continued: true });
-      doc.text(money(item.unitPrice), 312, doc.y, { width: 80, continued: true });
+      doc.text(money((item.snapshot as any)?.unitPrice), 312, doc.y, { width: 80, continued: true });
       doc.text(Number(item.gradeMultiplier).toFixed(3), 392, doc.y, { width: 60, continued: true });
-      doc.text(money(item.baseCost), 452, doc.y, { width: 80, align: "right" });
+      doc.text(money((item.snapshot as any)?.baseCost), 452, doc.y, { width: 80, align: "right" });
     });
 
     doc.moveDown();
@@ -504,8 +503,8 @@ exportRoutes.get(
       row.items.forEach((item) => {
         detail.addRow([
           row.batchId, row.name, item.itemName,
-          moneyNum(item.quantity), moneyNum(item.unitPrice),
-          moneyNum(item.gradeMultiplier), moneyNum(item.extraPrice), moneyNum(item.baseCost)
+          moneyNum(item.quantity), moneyNum((item.snapshot as any)?.unitPrice),
+          moneyNum(item.gradeMultiplier), moneyNum((item.snapshot as any)?.extraPrice), moneyNum((item.snapshot as any)?.baseCost)
         ]);
       });
     });

@@ -38,6 +38,10 @@ const envSchema = z.object({
 
   // Logging
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "debug"]).default("info"),
+
+  // Supabase
+  SUPABASE_URL: z.string().url("SUPABASE_URL must be a valid URL"),
+  SUPABASE_ANON_KEY: z.string().min(1, "SUPABASE_ANON_KEY is required"),
 });
 
 // ── Parse & validate ────────────────────────────────────────────────────────
@@ -92,4 +96,6 @@ export const env = {
   accessTokenTtl: _env.ACCESS_TOKEN_TTL,
   refreshTokenTtlDays: _env.REFRESH_TOKEN_TTL_DAYS,
   logLevel: _env.LOG_LEVEL,
+  supabaseUrl: _env.SUPABASE_URL,
+  supabaseAnonKey: _env.SUPABASE_ANON_KEY,
 } as const;

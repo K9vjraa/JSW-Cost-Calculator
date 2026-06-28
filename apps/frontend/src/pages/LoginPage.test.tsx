@@ -12,7 +12,7 @@ vi.mock("../store/auth", () => {
       isLoading: false,
       error: null,
       clearError: vi.fn(),
-      login: vi.fn().mockResolvedValue({ id: "demo-employee", role: "EMPLOYEE", name: "Rahul Sharma", department: "EMPLOYEE" })
+      login: vi.fn().mockResolvedValue({ id: "demo-employee", role: "COSTING_DEPARTMENT", name: "Rahul Sharma", department: "COSTING" })
     })
   };
 });
@@ -27,7 +27,7 @@ describe("LoginPage Component", () => {
 
     expect(screen.getByLabelText(/Email Address/i)).toBeDefined();
     expect(screen.getByLabelText(/Password/i)).toBeDefined();
-    expect(screen.getAllByRole("button", { name: /Sign In to MCMS/i })[0]).toBeDefined();
+    expect(screen.getAllByRole("button", { name: /^Sign In$/i })[0]).toBeDefined();
   });
 
   it("validates form input submissions", async () => {
@@ -37,7 +37,7 @@ describe("LoginPage Component", () => {
       </MemoryRouter>
     );
 
-    const submitBtn = screen.getAllByRole("button", { name: /Sign In to MCMS/i })[0];
+    const submitBtn = screen.getAllByRole("button", { name: /^Sign In$/i })[0];
     fireEvent.click(submitBtn);
 
     // Form inputs should show validation feedback or prevent submit

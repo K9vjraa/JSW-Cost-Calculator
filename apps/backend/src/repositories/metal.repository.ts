@@ -70,7 +70,7 @@ export async function listRawMaterials(page: number, limit: number) {
       include: { prices: { where: { active: true }, orderBy: { effectiveFrom: "desc" }, take: 1 } },
       skip,
       take: limit,
-      orderBy: { name: "asc" }
+      orderBy: { materialName: "asc" }
     })
   );
   return { data, total, page, limit };

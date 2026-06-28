@@ -43,7 +43,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       exit={{ opacity: 0, scale: 0.9, y: 15 }}
       transition={{ type: "spring", damping: 25, stiffness: 350 }}
       className={cn(
-        "rounded-xl border p-4 shadow-lg flex items-start justify-between gap-3 text-left w-full pointer-events-auto bg-white",
+        "rounded-sm border p-4 shadow-sm flex items-start justify-between gap-3 text-left w-full pointer-events-auto bg-white",
         styles.card
       )}
     >

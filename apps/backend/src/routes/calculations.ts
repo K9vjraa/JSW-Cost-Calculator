@@ -76,7 +76,7 @@ async function resolvePreview(input: z.infer<typeof calculationSchema>) {
       if (!price)
         throw new ApiError(
           400,
-          `No active master price exists for ${metal?.name ?? rawMaterial?.name}. Please update the price master before costing.`
+          `No active master price exists for ${metal?.name ?? rawMaterial?.materialName}. Please update the price master before costing.`
         );
 
       return {
@@ -85,7 +85,7 @@ async function resolvePreview(input: z.infer<typeof calculationSchema>) {
         rawMaterialId: item.rawMaterialId,
         gradeId: grade?.id ?? null,
         gradeName: grade?.name,
-        name: grade?.name ?? rawMaterial?.name ?? metal!.name,
+        name: grade?.name ?? rawMaterial?.materialName ?? metal!.name,
         quantity: String(item.quantity),
         compositionPct: item.compositionPct != null ? String(item.compositionPct) : null,
         unitPrice: price.pricePerUnit.toString(),

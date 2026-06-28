@@ -63,7 +63,7 @@ export function ProductAccordion({ grade }: ProductAccordionProps) {
             >
               <div className="grid gap-2">
                 {Object.entries(mechanical).map(([key, val]) => (
-                  <div key={key} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100 shadow-sm text-xs">
+                  <div key={key} className="flex justify-between items-center bg-white p-2 rounded-sm border border-slate-100 shadow-sm text-xs">
                     <span className="font-semibold text-slate-500">{key}</span>
                     <strong className="font-bold text-slate-800">{val}</strong>
                   </div>
@@ -84,7 +84,7 @@ export function ProductAccordion({ grade }: ProductAccordionProps) {
                 {Object.entries(chemical).map(([key, val]) => {
                   const percent = parseFloat(val);
                   return (
-                    <div key={key} className="flex flex-col gap-1.5 bg-white p-2 rounded-lg border border-slate-100 shadow-sm text-xs">
+                    <div key={key} className="flex flex-col gap-1.5 bg-white p-2 rounded-sm border border-slate-100 shadow-sm text-xs">
                       <div className="flex justify-between items-center">
                         <span className="font-semibold text-slate-500">{key} Content</span>
                         <strong className="font-extrabold text-blue-600">{val}</strong>
@@ -111,7 +111,7 @@ export function ProductAccordion({ grade }: ProductAccordionProps) {
             >
               <div className="grid gap-2">
                 {Object.entries(tolerance).map(([key, val]) => (
-                  <div key={key} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100 shadow-sm text-xs">
+                  <div key={key} className="flex justify-between items-center bg-white p-2 rounded-sm border border-slate-100 shadow-sm text-xs">
                     <span className="font-semibold text-slate-500">{key}</span>
                     <strong className="font-bold text-slate-800">{val}</strong>
                   </div>
@@ -130,7 +130,7 @@ export function ProductAccordion({ grade }: ProductAccordionProps) {
             >
               <div className="grid gap-2">
                 {Object.entries(bend).map(([key, val]) => (
-                  <div key={key} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-100 shadow-sm text-xs">
+                  <div key={key} className="flex justify-between items-center bg-white p-2 rounded-sm border border-slate-100 shadow-sm text-xs">
                     <span className="font-semibold text-slate-500">{key}</span>
                     <Badge className="border-indigo-150 bg-indigo-50/55 text-indigo-700 font-bold">
                       {val}

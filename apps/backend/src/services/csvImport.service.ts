@@ -306,15 +306,15 @@ export class CsvImportService {
 
         if (rmIdOrCode) {
           let rm = await prisma.rawMaterial.findFirst({
-            where: { OR: [{ id: rmIdOrCode }, { code: rmIdOrCode }] }
+            where: { OR: [{ id: rmIdOrCode }, { materialCode: rmIdOrCode }] }
           });
           if (!rm) {
             // Seed raw material if not found
             rm = await prisma.rawMaterial.create({
               data: {
                 id: rmIdOrCode.startsWith("rm-") ? rmIdOrCode : undefined,
-                code: rmIdOrCode.toUpperCase(),
-                name: rmIdOrCode.toUpperCase(),
+                materialCode: rmIdOrCode.toUpperCase(),
+                materialName: rmIdOrCode.toUpperCase(),
               }
             });
           }
@@ -740,7 +740,7 @@ export class CsvImportService {
 
         if (rmIdOrCode) {
           const rm = await prisma.rawMaterial.findFirst({
-            where: { OR: [{ id: rmIdOrCode }, { code: rmIdOrCode }] }
+            where: { OR: [{ id: rmIdOrCode }, { materialCode: rmIdOrCode }] }
           });
           if (rm) rawMaterialId = rm.id;
         }
@@ -795,9 +795,7 @@ export class CsvImportService {
     let skipped = 0;
     const errors: string[] = [];
 
-    // Ensure Roles exist
-    const costingRole = await prisma.role.upsert({ where: { name: "COSTING_DEPARTMENT" }, update: {}, create: { name: "COSTING_DEPARTMENT", description: "Costing Department" } });
-    const pdqcRole = await prisma.role.upsert({ where: { name: "PDQC" }, update: {}, create: { name: "PDQC", description: "PDQC Team" } });
+    // No roles to upsert since role table is removed
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
@@ -814,7 +812,7 @@ export class CsvImportService {
       const status = statusIdx !== -1 ? row[statusIdx]?.trim() : "ACTIVE";
       const roleName = roleIdx !== -1 ? row[roleIdx]?.trim().toUpperCase() : "PDQC";
 
-      const activeRole = roleName === "COSTING_DEPARTMENT" ? costingRole : pdqcRole;
+      const activeRole = roleName === "COSTING_DEPARTMENT" ? "COSTING_DEPARTMENT" : "PDQC";
 
       try {
         const existing = await prisma.user.findUnique({ where: { email } });
@@ -825,13 +823,11 @@ export class CsvImportService {
 
         await prisma.user.create({
           data: {
-            id,
+            id: id || crypto.randomUUID(),
             name,
             email,
-            passwordHash: passHash,
-            department,
-            status,
-            roleId: activeRole.id
+            department: department as any,
+            role: activeRole
           }
         });
         imported++;
@@ -877,9 +873,8 @@ export class CsvImportService {
     // Ensure we have a default user to fall back on
     let defaultUser = await prisma.user.findFirst();
     if (!defaultUser) {
-      const costingRole = await prisma.role.upsert({ where: { name: "COSTING_DEPARTMENT" }, update: {}, create: { name: "COSTING_DEPARTMENT" } });
       defaultUser = await prisma.user.create({
-        data: { name: "System Admin", email: "admin@jsw-mcms.local", passwordHash: "dummy", roleId: costingRole.id }
+        data: { id: "9383886f-1438-4f46-81e7-ad77a7fa0450", name: "System Admin", email: "admin@jsw-mcms.local", role: "COSTING_DEPARTMENT" }
       });
     }
 
@@ -999,12 +994,12 @@ export class CsvImportService {
           gradeIds = gradeIdsStr.split(";").map(id => id.trim());
         }
 
-        await prisma.comparisonRecord.create({
+        await prisma.comparisonSession.create({
           data: {
             id,
             name,
-            gradeIds: JSON.stringify(gradeIds),
-            userId
+            createdById: userId,
+            items: { create: gradeIds.map((gradeId: string) => ({ gradeId })) }
           }
         });
         imported++;

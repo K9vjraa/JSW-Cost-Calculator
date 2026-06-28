@@ -1,22 +1,17 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { Actor } from "@jsw-mcms/types";
-import { login as apiLogin, logout as apiLogout } from "../services/api";
+import { AuthService } from "../services/auth.service";
 
 export interface AuthState {
   actor: Actor | undefined;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<Actor>;
+  login: (email: string, password: string, department: "COSTING" | "PDQC", rememberMe?: boolean) => Promise<Actor>;
   logout: () => Promise<void>;
   clearError: () => void;
+  setActor: (actor: Actor | undefined) => void;
 }
-
-// Helper to determine role from email in offline demo mode
-const roleFromEmail = (email: string): Actor["role"] => {
-  if (email.includes("admin") || email.includes("cost")) return "COSTING_DEPARTMENT";
-  return "PDQC";
-};
 
 // ── Persistent Zustand Store ──────────────────────────────────────────────────
 export const useAuthStore = create<AuthState>()(
@@ -26,38 +21,33 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       error: null,
 
-      login: async (email: string, password: string, rememberMe?: boolean) => {
+      setActor: (actor) => set({ actor }),
+
+      login: async (email: string, password: string, department: "COSTING" | "PDQC", rememberMe?: boolean) => {
         set({ isLoading: true, error: null });
         try {
-          const next = await apiLogin(email, password, rememberMe);
-          set({ actor: next, isLoading: false });
-          return next;
+          const actor = await AuthService.login(email, password, department, rememberMe);
+          set({ actor, isLoading: false });
+          console.log("[TRACE] Login Success: Actor=", actor);
+          return actor;
         } catch (err: unknown) {
-          if (import.meta.env.DEV) {
-            // Offline demo fallback inside development environment
-            const role = roleFromEmail(email);
-            const demoActor: Actor = {
-              id: `demo-${role.toLowerCase()}`,
-              email,
-              role,
-              name: role === "COSTING_DEPARTMENT" ? "Costing Admin" : "PDQC Specialist",
-              department: role === "COSTING_DEPARTMENT" ? "Costing" : "PDQC"
-            };
-            set({ actor: demoActor, isLoading: false });
-            return demoActor;
+          // If error has the standardized envelope, use its message
+          let apiMsg: string | undefined;
+          if (err && typeof err === "object" && "response" in err) {
+            const resData = (err as { response?: { data?: { error?: { message?: string } } } }).response?.data;
+            apiMsg = resData?.error?.message;
           }
-          const errMsg =
-            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
-            (err instanceof Error ? err.message : "Invalid credentials");
+          const errMsg = apiMsg || (err instanceof Error ? err.message : String(err)) || "Invalid email or password.";
           set({ error: errMsg, isLoading: false });
           throw new Error(errMsg, { cause: err });
         }
       },
 
       logout: async () => {
+        console.log("[TRACE] authStore logout() triggered");
         set({ isLoading: true });
         try {
-          await apiLogout();
+          await AuthService.logout();
         } finally {
           set({ actor: undefined, error: null, isLoading: false });
         }

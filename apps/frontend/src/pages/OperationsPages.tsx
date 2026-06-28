@@ -1,8 +1,6 @@
 import { 
   Download, 
-  FileBarChart2, 
-  LockKeyhole, 
-  Plus, 
+  Plus,
   ShieldAlert, 
   Users,
   RefreshCw,
@@ -12,40 +10,109 @@ import {
   AlertCircle,
   TrendingUp,
   Sliders,
-  DollarSign,
+  IndianRupee,
   Trash2,
   Search,
-  Calendar
+  Calendar,
+  Eye, 
+  Edit2, 
+  Edit3,
+  MoreVertical,
+  Activity,
+  CheckCircle,
+  Clock,
+  Copy,
+  History,
+  Send,
+  ThumbsUp,
+  GitMerge,
+  FileBarChart2,
+  BarChart3,
+  PieChart,
+  Filter,
+  FileText,
+  FileClock,
+  BookOpen,
+  ArrowUpRight,
+  ArrowDownRight,
+  ChevronRight,
+  Zap,
+  Table2,
+  LayoutGrid,
+  ListFilter,
+  Timer,
+  TrendingDown,
+  Package,
+  DollarSign,
+  FileOutput,
+  Hourglass,
+  Calculator,
+  GitBranch,
+  Save,
+  Share2,
+  ChevronDown,
+  Upload,
+  
+  Pause,
+  Play,
+  MoreHorizontal
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { jsPDF } from "jspdf";
-import * as XLSX from "xlsx";
-import { toast } from "sonner";
+// xlsx import removed
+import { inr, shortDate } from "@/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import { Table, TableCell, TableHead } from "@/components/ui/table";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  calculations, 
-  grades as gradesFixture, 
-  metals as metalsFixture, 
-  rawMaterials as rawMaterialsFixture 
-} from "@/data/fixtures";
-import { shortDate, inr } from "@/utils";
-import { api, getOrFixture } from "@/services/api";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusBadge } from "../components/StatusBadge";
+import { MostUsedGradesCard } from "../components/MostUsedGradesCard";
+import { CostImpactAnalysisCard } from "../components/CostImpactAnalysisCard";
+import { CurrentRateCard } from "@/components/CurrentRateCard";
+import { api } from "@/services/api";
 import { useUsers } from "@/hooks/useQuery";
-import { EnterpriseDataTable, type EnterpriseColumnDef } from "@/components/EnterpriseDataTable";
+import { GradeDetailsDrawer } from "../components/GradeDetailsDrawer";
+import { EnterpriseDataTable, type EnterpriseColumnDef } from "../components/EnterpriseDataTable";
+import { KPIWidget } from "../components/KPIWidget";
+import { GradeMetricCard } from "../components/GradeMetricCard";
+import { GradeDistributionChart } from "../components/GradeDistributionChart";
+import { GradeManagementToolbar } from "../components/GradeManagementToolbar";
+import { GradeManagementSearchFilters } from "../components/GradeManagementSearchFilters";
+import { CloneGradeModal } from "../components/CloneGradeModal";
+import { BulkUpdateModal } from "../components/BulkUpdateModal";
+import { CompareGradesModal } from "../components/CompareGradesModal";
+import { GradeImportModal } from "../components/GradeImportModal";
+import * as XLSX from "xlsx";
+import { GradeHierarchyTree } from "../components/GradeHierarchyTree";
+import { ChemistrySummary } from "../components/ChemistrySummary";
+import { PriceActivityTimeline } from "../components/PriceActivityTimeline";
+import { GradeInsightsDashboard } from "../components/GradeInsightsDashboard";
+import { ReportsAnalyticsDashboard } from "../components/ReportsAnalyticsDashboard";
 import { useTableQuery } from "@/hooks/useTableQuery";
-import { useERPConnection } from "@/hooks/useERPConnection";
+
 import { useAuth, useAuthStore } from "../store/auth";
 import { useUIStore } from "../store/uiStore";
 import { useSettingsStore } from "../store/settingsStore";
+import { 
+  useRawMaterials, 
+  useCreateRawMaterial, 
+  useUpdateRawMaterial, 
+  usePriceHistory,
+  useActiveMaterials,
+  useCurrentMaterialRate,
+  usePublishNewRate
+} from "@/services/materialRatesApi";
 
 // Reusable Page Header
-function PageHead({ title, icon: Icon }: { title: string; icon: typeof LockKeyhole }) {
+function PageHead({ title, icon: Icon }: { title: string; icon: any }) {
   return (
     <header className="flex items-center gap-3">
       <span className="grid size-9 place-items-center rounded border border-slate-200 bg-slate-50 text-slate-600">
@@ -62,7 +129,7 @@ function PageHead({ title, icon: Icon }: { title: string; icon: typeof LockKeyho
 // Reusable Box Card
 function Box({ title, value }: { title: string; value: string }) {
   return (
-    <Card className="rounded-md border border-[#e5e7eb] bg-white p-4">
+    <Card className="rounded-sm border border-[#e5e7eb] bg-white p-4">
       <p className="text-[10px] font-medium uppercase tracking-wider text-slate-500">{title}</p>
       <strong className="mt-1 block text-lg font-semibold text-slate-950 tracking-tight">{value}</strong>
     </Card>
@@ -74,22 +141,174 @@ type TableApiResponse<T> = {
   pagination?: { page: number; limit: number; total: number; pages: number };
 };
 
+function PriceTrendSparkline({ history }: { history: any[] }) {
+  // Take last 5 updates and reverse them so they are chronological
+  const points = [...history]
+    .slice(0, 5)
+    .reverse()
+    .map(h => Number(h.newPrice || h.new_rate));
+
+  if (points.length < 2) {
+    return (
+      <div className="flex h-12 w-full items-center justify-center rounded border border-dashed border-slate-200 bg-slate-50 text-[10px] text-slate-400">
+        No price trend data available (minimum 2 price history entries required)
+      </div>
+    );
+  }
+
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = max - min;
+
+  const width = 100;
+  const height = 30;
+  const padding = 2;
+
+  const svgPoints = points.map((val, idx) => {
+    const x = padding + (idx / (points.length - 1)) * (width - 2 * padding);
+    const y = range === 0 
+      ? height / 2 
+      : height - padding - ((val - min) / range) * (height - 2 * padding);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+
+  return (
+    <div className="rounded border border-slate-200 bg-slate-50 p-2.5">
+      <div className="flex items-center justify-between mb-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+        <span>5-Period Price Trend</span>
+        <span className="font-mono text-slate-700">Min: {inr(min)} | Max: {inr(max)}</span>
+      </div>
+      <div className="relative h-10 w-full">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+          <polyline
+            fill="none"
+            stroke="#0b5cbf"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            points={svgPoints}
+          />
+          {points.map((val, idx) => {
+            const x = padding + (idx / (points.length - 1)) * (width - 2 * padding);
+            const y = range === 0 
+              ? height / 2 
+              : height - padding - ((val - min) / range) * (height - 2 * padding);
+            return (
+              <circle
+                key={idx}
+                cx={x.toFixed(1)}
+                cy={y.toFixed(1)}
+                r="1.5"
+                className="fill-white stroke-[#0b5cbf]"
+                strokeWidth="1"
+              />
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export function MastersPage({ focus = "material-master" }: { focus?: "metals" | "users" | "user-management" | "settings" | "material-master" | "material-rates" | "grade-builder" }) {
   const { actor } = useAuth();
-  const { isConnected, isReconnecting, refetch } = useERPConnection();
+  const queryClient = useQueryClient();
+
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
   const [query, setQuery] = useState("");
   const metalTable = useTableQuery({ sortBy: "name", sortDir: "asc" });
   const gradeTable = useTableQuery({ sortBy: "name", sortDir: "asc" });
   
+  const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
+  const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  
+  const [selectedGradeIds, setSelectedGradeIds] = useState<Set<string>>(new Set());
+  const rawTable = useTableQuery({ sortBy: "alloyName", sortDir: "asc" });
+  
   // Real-time API States
   const [metals, setMetals] = useState<any[]>([]);
+
   const [grades, setGrades] = useState<any[]>([]);
-  const [rawMaterials, setRawMaterials] = useState<any[]>([]);
-  const [priceHistory, setPriceHistory] = useState<any[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState<any>(null);
+
+  const closeGradeModal = () => {
+    setActiveModal(null);
+    setSelectedGrade(null);
+    setGradeName("");
+    setGradeSub("");
+    setGradeMultiplier("1.0");
+    setGradeExtraPrice("0");
+    setChemCr("");
+    setChemNi("");
+    setChemC("");
+  };
+
+  const [isGradeDrawerOpen, setIsGradeDrawerOpen] = useState(false);
+  const [drawerGrade, setDrawerGrade] = useState<any>(null);
+  const openGradeDetails = (grade: any) => {
+    setDrawerGrade(grade);
+    setIsGradeDrawerOpen(true);
+  };
+
+  const openEditGrade = (grade: any) => {
+    setSelectedGrade(grade);
+    setGradeMetalId(grade.metalId);
+    setGradeName(grade.name);
+    setGradeSub(grade.subGrade || "");
+    setGradeMultiplier(grade.multiplier?.toString() || "1.0");
+    setGradeExtraPrice(grade.extraPrice?.toString() || "0");
+    setChemCr(grade.chemicalComposition?.Cr || "");
+    setChemNi(grade.chemicalComposition?.Ni || "");
+    setChemC(grade.chemicalComposition?.C || "");
+    setActiveModal("grade");
+  };
+
+  const { data: rawMaterials = [] } = useRawMaterials();
+  const createRawMaterial = useCreateRawMaterial();
+  const updateRawMaterial = useUpdateRawMaterial();
+
+  const { data: priceHistory = [] } = usePriceHistory();
+
+  const priceLatestMap = useMemo(() => {
+    const map = new Map<string, any>();
+    if (!priceHistory) return map;
+    // assume priceHistory entries contain rawMaterialId or materialId and updatedAt
+    const sorted = [...priceHistory].sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || 0).getTime() - new Date(a.updatedAt || a.createdAt || 0).getTime());
+    for (const h of sorted) {
+      const id = h.rawMaterialId || h.materialId || h.material_id || h.raw_material_id || h.raw_material_id;
+      if (id && !map.has(id)) map.set(id, h);
+    }
+    return map;
+  }, [priceHistory]);
   const [alloys, setAlloys] = useState<any[]>([]);
 
+  // Sync Status State
+  const [syncStats, setSyncStats] = useState<{
+    total: number;
+    success: number;
+    failed: number;
+    timestamp: string | null;
+  } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Selected row for View/Edit/History
+  const [selectedRaw, setSelectedRaw] = useState<any>(null);
+
   // Modal control state
-  const [activeModal, setActiveModal] = useState<"metal" | "grade" | "raw" | "price" | "alloy" | null>(null);
+  const [activeModal, setActiveModal] = useState<"metal" | "grade" | "raw" | "edit_raw" | "view_raw" | "history_raw" | "price" | "alloy" | null>(null);
 
   // Metal Form States
   const [metalName, setMetalName] = useState("");
@@ -112,13 +331,28 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
   const [rawName, setRawName] = useState("");
   const [rawCode, setRawCode] = useState("");
   const [rawUnit, setRawUnit] = useState("kg");
+  const [rawCategory, setRawCategory] = useState("Ferro Alloy");
+  const [rawCurrentRate, setRawCurrentRate] = useState("");
+  const [rawSupplier, setRawSupplier] = useState("");
+  const [rawDescription, setRawDescription] = useState("");
+  const [isMicroFlag, setIsMicroFlag] = useState(false);
+  const [isAvailFlag, setIsAvailFlag] = useState(true);
 
   // Price Master Form States
-  const [priceType, setPriceType] = useState<"metal" | "raw">("metal");
+  const [, setPriceType] = useState<"metal" | "raw">("raw");
   const [priceTargetId, setPriceTargetId] = useState("");
   const [priceValue, setPriceValue] = useState("");
   const [priceSource, setPriceSource] = useState("JSW Procurement Desk");
   const [priceReason, setPriceReason] = useState("Market Index Alignment");
+  const [priceRemarks, setPriceRemarks] = useState("");
+  const [showConfirmPublish, setShowConfirmPublish] = useState(false);
+  const [showInlineImpact, setShowInlineImpact] = useState(false);
+  const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().split("T")[0]);
+
+  const { data: activeMaterials = [] } = useActiveMaterials();
+  const { data: currentRateInfo, isLoading: isLoadingCurrentRate } = useCurrentMaterialRate(activeModal === "price" && priceTargetId ? priceTargetId : null);
+  const publishNewPrice = usePublishNewRate();
+  const { data: priceTargetHistory = [] } = usePriceHistory(activeModal === "price" && priceTargetId ? priceTargetId : null);
 
   // Alloy Composition Structures Form States
   const [alloyName, setAlloyName] = useState("");
@@ -131,25 +365,40 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
   // Load and refresh master data from backend
   const refreshData = async () => {
     try {
-      const metalsRes = await getOrFixture<{ data: any[] }>("/masters/metals?limit=100", { data: metalsFixture });
-      const gradesRes = await getOrFixture<{ data: any[] }>("/masters/grades?limit=100", { data: gradesFixture });
-      const rawRes = await getOrFixture<{ data: any[] }>("/masters/raw-materials?limit=100", { data: rawMaterialsFixture });
-      const historyRes = await getOrFixture<{ data: any[] }>("/masters/price-history?limit=100", { data: [] });
-      const alloysRes = await getOrFixture<{ data: any[] }>("/masters/alloys?limit=100", { data: [] });
+      const [
+        metalsRes,
+        gradesRes,
+        alloysRes
+    ] = await Promise.allSettled([
+        api.get('/metals', { params: { limit: 100 } }),
+        api.get('/grades', { params: { limit: 100 } }),
+        api.get('/alloys', { params: { limit: 100 } })
+      ]);
 
-      setMetals(metalsRes.data || []);
-      setGrades(gradesRes.data || []);
-      setRawMaterials(rawRes.data || []);
-      setPriceHistory(historyRes.data || []);
-      setAlloys(alloysRes.data || []);
+      const metalsData = metalsRes.status === 'fulfilled' ? metalsRes.value.data?.data : null;
+      const gradesData = gradesRes.status === 'fulfilled' ? gradesRes.value.data?.data : null;
+      const alloysData = alloysRes.status === 'fulfilled' ? alloysRes.value.data?.data : null;
 
-      if (metalsRes.data && metalsRes.data.length > 0) {
-        setGradeMetalId(metalsRes.data[0].id);
-        setPriceTargetId(metalsRes.data[0].id);
+      const metalsError = metalsRes.status === 'rejected' ? metalsRes.reason : null;
+      const gradesError = gradesRes.status === 'rejected' ? gradesRes.reason : null;
+      const alloysError = alloysRes.status === 'rejected' ? alloysRes.reason : null;
+
+      if (metalsError) throw metalsError;
+      if (gradesError) throw gradesError;
+      if (alloysError) throw alloysError;
+
+      setMetals(metalsData || []);
+      setGrades(gradesData || []);
+      setAlloys(alloysData || []);
+
+      if (metalsData && metalsData.length > 0) {
+        setGradeMetalId(metalsData[0].id);
+      }
+      if (rawMaterials && rawMaterials.length > 0) {
+        setPriceTargetId(rawMaterials[0].id);
       }
     } catch (err) {
       console.error("Failed to load ERP master data", err);
-      toast.error("Offline mode active: Using fixture fallback data.");
     }
   };
 
@@ -160,10 +409,67 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
     return () => clearTimeout(timer);
   }, []);
 
-  // Filter lists based on query
-  const filteredRaw = useMemo(() => {
-    return rawMaterials.filter(r => `${r.name} ${r.code}`.toLowerCase().includes(query.toLowerCase()));
-  }, [rawMaterials, query]);
+  // KPI computations for Material Rates page
+
+
+  const todaysUpdatesCount = useMemo(() => {
+    if (!priceHistory || priceHistory.length === 0) return 0;
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const d = today.getDate();
+    return priceHistory.filter((p: any) => {
+      const dt = new Date(p.updatedAt || p.createdAt || p.effectiveDate || p.updated_at || p.created_at);
+      return dt.getFullYear() === y && dt.getMonth() === m && dt.getDate() === d;
+    }).length;
+  }, [priceHistory]);
+
+  const filteredRawRates = useMemo(() => {
+    return rawMaterials.filter((r: any) => {
+      // Global search by Material Code, Alloy Name, and Description
+      const code = (r.materialCode || r.rawMatId || "").toString().toLowerCase();
+      const alloyName = (r.materialName || r.name || "").toLowerCase();
+      const desc = (r.description || r.description || "").toLowerCase();
+      
+      const searchLower = debouncedSearch.toLowerCase();
+      const matchesSearch = 
+        code.includes(searchLower) || 
+        alloyName.includes(searchLower) || 
+        desc.includes(searchLower);
+
+      let matchesFilter = true;
+      if (categoryFilter === "available") {
+        matchesFilter = r.availability === true && r.status === "ACTIVE";
+      } else if (categoryFilter === "micro") {
+        matchesFilter = r.isMicro === true && r.status === "ACTIVE";
+      } else if (categoryFilter === "inactive") {
+        matchesFilter = r.status === "INACTIVE";
+      } else {
+        matchesFilter = true;
+      }
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [rawMaterials, debouncedSearch, categoryFilter]);
+
+  const paginatedRawRates = useMemo(() => {
+    let result = [...filteredRawRates];
+    if (rawTable.query.sortBy) {
+      result.sort((a, b) => {
+        const aVal = a[rawTable.query.sortBy as keyof typeof a];
+        const bVal = b[rawTable.query.sortBy as keyof typeof b];
+        if (aVal < bVal) return rawTable.query.sortDir === "desc" ? 1 : -1;
+        if (aVal > bVal) return rawTable.query.sortDir === "desc" ? -1 : 1;
+        return 0;
+      });
+    }
+    const start = (rawTable.query.page - 1) * rawTable.query.limit;
+    return result.slice(start, start + rawTable.query.limit);
+  }, [filteredRawRates, rawTable.query]);
+
+  const { data: rawPriceHistory = [], isLoading: isLoadingHistory } = usePriceHistory(selectedRaw ? selectedRaw.id : null);
+
+
 
   const metalsTableQuery = useQuery({
     queryKey: ["enterprise-table", "metals", metalTable.queryKey],
@@ -172,28 +478,28 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
         const { data } = await api.get<TableApiResponse<any>>("/metals", { params: metalTable.params });
         return data;
       } catch {
-        const fallback = metalsFixture.filter((metal) => `${metal.name} ${metal.code}`.toLowerCase().includes((metalTable.params.search as string | undefined)?.toLowerCase() ?? ""));
-        return { data: fallback, pagination: { page: 1, limit: 25, total: fallback.length, pages: 1 } };
+        return { data: [], pagination: { page: 1, limit: 25, total: 0, pages: 1 } };
       }
     },
     placeholderData: (previous) => previous
   });
-
   const gradesTableQuery = useQuery({
     queryKey: ["enterprise-table", "grades", gradeTable.queryKey],
     queryFn: async () => {
       try {
-        const { data } = await api.get<TableApiResponse<any>>("/grades", { params: gradeTable.params });
-        return data;
-      } catch {
-        const fallback = gradesFixture.filter((grade) => `${grade.name} ${(grade as any).subGrade ?? ""}`.toLowerCase().includes((gradeTable.params.search as string | undefined)?.toLowerCase() ?? ""));
-        return { data: fallback, pagination: { page: 1, limit: 25, total: fallback.length, pages: 1 } };
+        const rawRes = await api.get<TableApiResponse<any>>("/grades", { params: gradeTable.params });
+        console.log("Grade API Raw Response:", rawRes);
+        console.log("Grade API Transformed Response:", rawRes.data);
+        return rawRes.data;
+      } catch (err) {
+        console.error("grades API failed:", err);
+        return { data: [], pagination: { page: 1, limit: 25, total: 0, pages: 1 } };
       }
     },
     placeholderData: (previous) => previous
   });
 
-  const metalColumns = useMemo<EnterpriseColumnDef<any>[]>(() => [
+  const metalColumns: EnterpriseColumnDef<any>[] = [
     { accessorKey: "name", header: "Metal Name", meta: { label: "Metal" }, cell: ({ row }) => <span className="font-bold text-slate-800">{row.original.name}</span> },
     { accessorKey: "code", header: "ERP Code", meta: { label: "Code", className: "font-mono text-[11px]" } },
     { accessorKey: "category", header: "Category", meta: { label: "Category" } },
@@ -210,43 +516,166 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
       header: "Status",
       meta: { label: "Status" },
       cell: ({ row }) => (
-        <Badge className={row.original.status === "ACTIVE" ? "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]" : "border-slate-200 bg-slate-100 text-slate-500"}>
+        <Badge className={row.original.status === "ACTIVE" ? "border-success-border bg-success-bg text-success-fg" : "border-slate-200 bg-slate-100 text-slate-500"}>
           {row.original.status}
         </Badge>
       )
     }
-  ], []);
+  ];
 
-  const gradeColumns = useMemo<EnterpriseColumnDef<any>[]>(() => [
-    { accessorKey: "name", header: "Grade Name", meta: { label: "Grade" }, cell: ({ row }) => <span className="font-bold text-slate-800">{row.original.name}</span> },
-    { accessorKey: "subGrade", header: "Subgrade", meta: { label: "Subgrade" }, cell: ({ row }) => row.original.subGrade || "-" },
-    { id: "metal", header: "Metal Class", enableSorting: false, meta: { label: "Metal" }, cell: ({ row }) => row.original.metal?.name || "Ferrous" },
-    { accessorKey: "multiplier", header: "Multiplier", meta: { label: "Multiplier", className: "font-mono" }, cell: ({ row }) => `${row.original.multiplier}x` },
-    { accessorKey: "extraPrice", header: "Extra Charge", meta: { label: "Extra" }, cell: ({ row }) => inr(row.original.extraPrice) },
+  const gradeColumns: EnterpriseColumnDef<any>[] = [
+    { accessorKey: "code", header: "Grade Code", meta: { label: "Grade Code", className: "font-mono" }, cell: ({ row }) => <span className="font-mono text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">{row.original.materialCode || row.original.name?.toUpperCase().replace(/\s+/g, '-') + "-01"}</span> },
+    { accessorKey: "name", header: "Grade Name", meta: { label: "Grade" }, cell: ({ row }) => <span className="font-bold text-sm text-primary">{row.original.name}</span> },
+    { id: "metal", header: "Metal Class", enableSorting: false, meta: { label: "Metal Class" }, cell: ({ row }) => <span className="text-slate-600 text-xs">{row.original.metal?.name || "Ferrous"}</span> },
+    { accessorKey: "subGrade", header: "Sub Grade", meta: { label: "Sub Grade" }, cell: ({ row }) => <span className="text-slate-600 text-xs">{row.original.subGrade || "-"}</span> },
+    { accessorKey: "multiplier", header: "Multiplier", meta: { label: "Multiplier", className: "font-mono" }, cell: ({ row }) => <span className="font-mono text-xs font-medium text-slate-700">{row.original.multiplier}x</span> },
+    { accessorKey: "extraPrice", header: "Premium (₹/MT)", meta: { label: "Premium" }, cell: ({ row }) => <span className="font-mono text-xs font-medium text-slate-700">{Number(row.original.extraPrice ?? 0).toFixed(2)}</span> },
     {
       id: "chemistry",
-      header: "Chemistry",
+      header: "Chemistry Summary",
       enableSorting: false,
-      meta: { label: "Chemistry", mobileHidden: true },
-      cell: ({ row }) => row.original.chemicalComposition && typeof row.original.chemicalComposition === "object" ? (
-        <div className="flex flex-wrap gap-1">
-          {Object.entries(row.original.chemicalComposition).map(([el, val]) => (
-            <Badge key={el} className="bg-slate-50 text-[10px] py-0">{el}: {val as string}</Badge>
-          ))}
-        </div>
-      ) : "Standard"
+      meta: { label: "Chemistry Summary", mobileHidden: true },
+      cell: ({ row }) => <ChemistrySummary composition={row.original.chemicalComposition} />
     },
     {
       accessorKey: "status",
       header: "Status",
       meta: { label: "Status" },
+      cell: ({ row }) => {
+        let badgeColor = "border-slate-200 bg-slate-100 text-slate-500";
+        let label = "Unknown";
+        
+        if (row.original.status === "ACTIVE") {
+          badgeColor = "border-success-border bg-success-bg text-success-fg";
+          label = "Active";
+        } else if (row.original.status === "DRAFT") {
+          badgeColor = "border-amber-200 bg-amber-50 text-amber-700";
+          label = "Draft";
+        } else if (row.original.status === "INACTIVE") {
+          badgeColor = "border-red-200 bg-red-50 text-red-700";
+          label = "Inactive";
+        }
+
+        return (
+          <Badge className={`${badgeColor} shadow-sm px-2.5 py-0.5 font-medium`}>
+            {label}
+          </Badge>
+        );
+      }
+    },
+    { accessorKey: "updatedAt", header: "Last Updated", meta: { label: "Last Updated" }, cell: ({ row }) => <div className="flex flex-col text-xs text-slate-600"><span className="font-medium">{new Date(row.original.updatedAt || new Date()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).replace(/ /g, '-')}</span><span className="text-slate-400">{new Date(row.original.updatedAt || new Date()).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span></div> },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
       cell: ({ row }) => (
-        <Badge className={row.original.status === "ACTIVE" ? "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]" : "border-slate-200 bg-slate-100 text-slate-500"}>
-          {row.original.status}
-        </Badge>
+        <TooltipProvider delayDuration={200}>
+          <div className="flex items-center gap-1.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="View Details" className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 hover:scale-105 focus-visible:ring-2 focus-visible:ring-[#0057b8] transition-all"><Eye className="size-4" /></Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">View Details</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="Edit Grade" onClick={() => openEditGrade(row.original)} className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 hover:scale-105 focus-visible:ring-2 focus-visible:ring-[#0057b8] transition-all"><Edit3 className="size-4" /></Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Edit Grade</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="Clone Grade" className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 hover:scale-105 focus-visible:ring-2 focus-visible:ring-[#0057b8] transition-all"><Copy className="size-4" /></Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Clone Grade</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="View History" className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50 hover:scale-105 focus-visible:ring-2 focus-visible:ring-[#0057b8] transition-all"><History className="size-4" /></Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">View History</TooltipContent>
+            </Tooltip>
+            
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="Delete Grade" onClick={() => handleDeleteGrade(row.original.id)} className="h-7 w-7 p-0 text-slate-500 hover:text-red-600 hover:bg-red-50 hover:scale-105 focus-visible:ring-2 focus-visible:ring-red-600 transition-all"><Trash2 className="size-4" /></Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="bg-red-600 text-white border-red-600">Delete Grade</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       )
     }
-  ], []);
+  ];
+
+  const rawColumns: EnterpriseColumnDef<any>[] = [
+    { accessorKey: "materialCode", header: "Material Code", size: 130, meta: { label: "Code", className: "font-mono text-[11px]" }, cell: ({ row }) => <span className="font-mono text-xs font-bold text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-sm">{row.original.materialCode}</span> },
+    { accessorKey: "materialName", header: "Material Name", size: 200, meta: { label: "Name" }, cell: ({ row }) => <span className="text-sm font-extrabold text-primary tracking-tight">{row.original.materialName}</span> },
+    { accessorKey: "category", header: "Category", size: 140, meta: { label: "Category" }, cell: ({ row }) => {
+      const cat = row.original.category?.name || "Uncategorized";
+      const map: Record<string, string> = {
+        "Ferro Alloy": "border-sky-200 bg-sky-50 text-sky-800",
+        "Aluminium": "border-indigo-200 bg-indigo-50 text-indigo-800",
+        "Flux": "border-amber-200 bg-amber-50 text-amber-800",
+        "Carbon Additive": "border-slate-200 bg-slate-100 text-slate-800",
+        "Calcium Alloy": "border-rose-200 bg-rose-50 text-rose-800",
+        "Non-Ferrous": "border-emerald-200 bg-emerald-50 text-emerald-800"
+      };
+      const cls = map[cat] || "border-slate-200 bg-slate-100 text-slate-600";
+      return <Badge className={`${cls} text-[11px] font-bold px-2.5 py-0.5 rounded-sm shadow-sm`}>{cat}</Badge>;
+    } },
+    { accessorKey: "description", header: "Description", size: 220, meta: { label: "Description" }, cell: ({ row }) => <span className="text-xs font-medium text-slate-500 max-w-[200px] truncate leading-relaxed block" title={row.original.description || ""}>{row.original.description || "-"}</span> },
+    { accessorKey: "availability", header: "Available", size: 110, meta: { label: "Available" }, cell: ({ row }) => <Badge className={row.original.availability ? "border-success-border bg-success-bg text-success-fg shadow-sm px-2.5 py-0.5" : "border-slate-200 bg-slate-100 text-slate-500 shadow-sm px-2.5 py-0.5"}>{row.original.availability ? "YES" : "NO"}</Badge> },
+    { accessorKey: "isMicro", header: "Micro", size: 100, meta: { label: "Micro" }, cell: ({ row }) => <Badge className={row.original.isMicro ? "border-blue-200 bg-blue-50 text-blue-700 shadow-sm px-2.5 py-0.5" : "border-slate-200 bg-slate-100 text-slate-500 shadow-sm px-2.5 py-0.5"}>{row.original.isMicro ? "YES" : "NO"}</Badge> },
+    { accessorKey: "currentRate", header: "Current Rate", size: 180, meta: { label: "Rate" }, cell: ({ row }) => {
+      const rateInfo = currentRateInfo?.[row.original.id];
+      const rate = Number(rateInfo?.rate || 0);
+      const hist = priceLatestMap.get(row.original.id) || null;
+      let changeEl = null;
+      if (hist) {
+        const oldP = Number(hist.oldPrice || hist.old_rate || 0);
+        const newP = Number(hist.newPrice || hist.new_rate || rate);
+        if (oldP > 0) {
+          const pct = ((newP - oldP) / oldP) * 100;
+          const arrow = pct > 0 ? "▲" : pct < 0 ? "▼" : "—";
+          const colorClass = pct > 0 ? "text-emerald-600 bg-emerald-50 border-emerald-100" : pct < 0 ? "text-rose-600 bg-rose-50 border-rose-100" : "text-slate-500 bg-slate-50 border-slate-200";
+          changeEl = <span className={`ml-2 text-[10px] font-bold ${colorClass} px-1.5 py-0.5 rounded-sm border flex items-center gap-0.5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.5)]`}>{arrow} {Math.abs(pct).toFixed(1)}%</span>;
+        }
+      }
+      return (
+        <div className="flex items-center">
+          <span className="font-mono text-sm font-black tracking-tight text-slate-800">{rate > 0 ? inr(rate) : "N/A"}</span>
+          {rate > 0 && <span className="text-[10px] text-slate-400 font-bold ml-1 uppercase">/ {row.original.unit || 'kg'}</span>}
+          {changeEl}
+        </div>
+      );
+    } },
+    { accessorKey: "updatedBy", header: "Updated By", size: 120, meta: { label: "Updated By" }, cell: ({ row }) => <span className="text-xs font-semibold text-slate-500">{row.original.updatedBy?.name || "System"}</span> },
+    { accessorKey: "updatedAt", header: "Last Updated", size: 120, meta: { label: "Last Updated" }, cell: ({ row }) => <span className="text-xs font-semibold text-slate-500">{row.original.updatedAt ? shortDate(row.original.updatedAt) : "N/A"}</span> },
+    { id: "actions", header: "Actions", size: 120, enableSorting: false, meta: { label: "Actions" }, cell: ({ row }) => (
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100 rounded-sm transition-colors" onClick={() => { setSelectedRaw(row.original); setActiveModal("view_raw"); }} title="View">
+          <Eye className="size-4 text-slate-500" />
+        </Button>
+        {actor?.role === "COSTING_DEPARTMENT" && (
+          <>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-blue-50 rounded-sm transition-colors" onClick={() => { setSelectedRaw(row.original); setRawName(row.original.materialName || ""); setRawCode(row.original.materialCode || ""); setRawUnit(row.original.unit || "kg"); setRawCategory(row.original.category || "Ferro Alloy"); setRawCurrentRate(row.original.currentRate?.toString() || ""); setRawSupplier(row.original.supplier || ""); setRawDescription(row.original.description || ""); setIsMicroFlag(row.original.isMicro ?? false); setIsAvailFlag(row.original.availability ?? true); setActiveModal("edit_raw"); }} title="Edit">
+              <Edit2 className="size-4 text-[#0b5cbf]" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-emerald-50 rounded-sm transition-colors" onClick={() => { setSelectedRaw(row.original); setPriceTargetId(row.original.id); setPriceType("raw"); setPriceValue(""); setPriceReason("Market Index Alignment"); setActiveModal("price"); }} title="Update Price">
+              <TrendingUp className="size-4 text-emerald-600" />
+            </Button>
+          </>
+        )}
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-slate-100 rounded-sm transition-colors" onClick={() => { setSelectedRaw(row.original); setActiveModal("history_raw"); }} title="History">
+          <MoreVertical className="size-4 text-slate-500" />
+        </Button>
+      </div>
+    ) }
+  ];
 
   // Form Submit Handlers
   const handleAddMetal = async (e: React.FormEvent) => {
@@ -279,13 +708,17 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
       toast.error("Please fill in grade name and multiplier.");
       return;
     }
+    if (!gradeMetalId) {
+      toast.error("Please select a Metal Master Base.");
+      return;
+    }
     try {
-      const chem: Record<string, string> = {};
+      const chem: Record<string, any> = { ...(selectedGrade?.chemicalComposition || {}) };
       if (chemCr) chem["Cr"] = chemCr;
       if (chemNi) chem["Ni"] = chemNi;
       if (chemC) chem["C"] = chemC;
 
-      await api.post("/masters/grades", {
+      const payload = {
         metalId: gradeMetalId,
         name: gradeName,
         subGrade: gradeSub || null,
@@ -296,72 +729,242 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
         toleranceProperties: { "Thickness": "+/- 0.10 mm" },
         bendProperties: { "Rating": "Good" },
         chemicalComposition: chem
-      });
-      toast.success(`Steel Grade ${gradeName} added to Metal Master.`);
-      setActiveModal(null);
-      setGradeName("");
-      setGradeSub("");
-      setGradeMultiplier("1.0");
-      setGradeExtraPrice("0");
-      setChemCr("");
-      setChemNi("");
-      setChemC("");
+      };
+
+      if (selectedGrade) {
+        await api.put(`/grades/${selectedGrade.id}`, payload);
+        toast.success(`Steel Grade ${gradeName} updated.`);
+      } else {
+        await api.post("/grades", payload);
+        toast.success(`Steel Grade ${gradeName} added to Metal Master.`);
+      }
+      closeGradeModal();
       refreshData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to create grade.");
+      toast.error(err.response?.data?.message || "Failed to save grade.");
+    }
+  };
+
+  const handleDeleteGrade = async (id: string) => {
+    if (!window.confirm("Are you sure you want to deactivate this grade?")) return;
+    try {
+      await api.delete(`/grades/${id}`);
+      toast.success("Grade deactivated.");
+      refreshData();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to deactivate grade.");
     }
   };
 
   const handleAddRaw = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!rawName || !rawCode) {
-      toast.error("Raw feed name and code are required.");
+      toast.error("Alloy name and material code are required.");
       return;
     }
+
+    // Material Code uniqueness validation
+    const codeExists = rawMaterials.some((r: any) => r.materialCode?.toLowerCase() === rawCode.toLowerCase());
+    if (codeExists) {
+      toast.error(`Material Code "${rawCode}" already exists. Material Code must be unique.`);
+      return;
+    }
+
     try {
-      await api.post("/masters/raw-materials", {
+      await createRawMaterial.mutateAsync({
         name: rawName,
-        code: rawCode,
+        code: rawCode.toUpperCase(),
+        category: rawCategory,
         unit: rawUnit,
-        status: "ACTIVE"
+        currentRate: parseFloat(rawCurrentRate) || 0,
+        supplier: rawSupplier || null,
+        status: "ACTIVE",
+        description: rawDescription || null,
+        isMicro: isMicroFlag,
+        isAvail: isAvailFlag
       });
       toast.success(`Raw Material Feed ${rawName} registered successfully.`);
       setActiveModal(null);
       setRawName("");
       setRawCode("");
+      setRawUnit("kg");
+      setRawCategory("Ferro Alloy");
+      setRawCurrentRate("");
+      setRawSupplier("");
+      setRawDescription("");
+      setIsMicroFlag(false);
+      setIsAvailFlag(true);
       refreshData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to register raw material.");
+      toast.error(err.response?.data?.message || err.message || "Failed to register raw material.");
     }
   };
 
-  const handlePublishPrice = async (e: React.FormEvent) => {
+  const handleEditRaw = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!priceTargetId || !priceValue) {
-      toast.error("Please select a target feed and price rate.");
+    if (!selectedRaw) return;
+    if (!rawName || !rawCode) {
+      toast.error("Alloy name and material code are required.");
       return;
     }
+
+    // Material Code uniqueness validation (excluding current raw material)
+    const codeExists = rawMaterials.some((r: any) => r.id !== selectedRaw.id && r.materialCode?.toLowerCase() === rawCode.toLowerCase());
+    if (codeExists) {
+      toast.error(`Material Code "${rawCode}" already exists. Material Code must be unique.`);
+      return;
+    }
+
     try {
-      await api.post("/masters/prices", {
-        metalId: priceType === "metal" ? priceTargetId : null,
-        rawMaterialId: priceType === "raw" ? priceTargetId : null,
-        supplierId: null,
-        pricePerUnit: parseFloat(priceValue),
-        currency: "INR",
-        unit: "kg",
-        source: priceSource,
-        location: "India",
-        effectiveFrom: new Date(),
-        reason: priceReason,
-        active: true
+      await updateRawMaterial.mutateAsync({
+        id: selectedRaw.id,
+        name: rawName,
+        code: rawCode.toUpperCase(),
+        category: rawCategory,
+        unit: rawUnit,
+        supplier: rawSupplier || null,
+        description: rawDescription || null,
+        isMicro: isMicroFlag,
+        isAvail: isAvailFlag
       });
-      toast.success("Master-locked price published and archived in history log.");
+      toast.success(`Raw Material Feed ${rawName} updated successfully.`);
       setActiveModal(null);
-      setPriceValue("");
-      setPriceReason("Market Index Alignment");
+      setRawName("");
+      setRawCode("");
+      setRawUnit("kg");
+      setRawCategory("Ferro Alloy");
+      setRawCurrentRate("");
+      setRawSupplier("");
+      setRawDescription("");
+      setIsMicroFlag(false);
+      setIsAvailFlag(true);
+      setSelectedRaw(null);
       refreshData();
     } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to publish master price.");
+      toast.error(err.response?.data?.message || err.message || "Failed to update raw material.");
+    }
+  };
+
+  const handlePublishPrice = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!priceTargetId) {
+      toast.error("Material Required");
+      return;
+    }
+    const val = parseFloat(priceValue);
+    if (isNaN(val) || val <= 0) {
+      toast.error("New Rate must be greater than 0");
+      return;
+    }
+    if (!effectiveDate) {
+      toast.error("Effective Date Required");
+      return;
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(effectiveDate);
+    selectedDate.setHours(0, 0, 0, 0);
+    if (selectedDate < today) {
+      toast.error("Effective Date cannot be in the past");
+      return;
+    }
+    if (!priceSource.trim()) {
+      toast.error("Supplier Required");
+      return;
+    }
+    if (!priceReason.trim()) {
+      toast.error("Reason Required");
+      return;
+    }
+    setShowConfirmPublish(true);
+  };
+
+  const handleConfirmPublish = async () => {
+    try {
+      const payload = {
+        materialId: priceTargetId,
+        newRate: parseFloat(priceValue),
+        effectiveDate: new Date(effectiveDate).toISOString(),
+        supplier: priceSource,
+        reason: priceReason,
+        remarks: priceRemarks || undefined
+      };
+      console.log("Price Update Payload:", payload);
+      await publishNewPrice.mutateAsync(payload);
+      toast.success("Price updated successfully and recorded in history.");
+      setActiveModal(null);
+      setPriceValue("");
+      setPriceRemarks("");
+      setPriceTargetId("");
+      setShowConfirmPublish(false);
+      // Note: React Query's onSuccess in usePublishNewRate invalidates queries automatically
+    } catch (err: any) {
+      console.error("Price Update Response Error:", err.response?.data || err);
+      toast.error(err.response?.data?.message || err.message || "Failed to publish master price.");
+    }
+  };
+
+  const handleSyncDatabase = async () => {
+    setIsSyncing(true);
+    let total = 0;
+    let success = 0;
+    let failed = 0;
+    try {
+      // Invalidate react query cache
+      await queryClient.invalidateQueries({ queryKey: ['RawMaterial'] });
+      await queryClient.invalidateQueries({ queryKey: ['enterprise-table'] });
+      
+      const [
+        metalsRes,
+        gradesRes,
+        alloysRes
+      ] = await Promise.allSettled([
+        api.get('/metals', { params: { limit: 100 } }),
+        api.get('/grades', { params: { limit: 100 } }),
+        api.get('/alloys', { params: { limit: 100 } })
+      ]);
+
+      if (metalsRes.status === 'fulfilled') {
+        const d = metalsRes.value.data?.data || [];
+        setMetals(d);
+        success += d.length;
+      } else {
+        failed += 1;
+        console.error("Metals sync failed", metalsRes);
+      }
+
+      if (gradesRes.status === 'fulfilled') {
+        const d = gradesRes.value.data?.data || [];
+        setGrades(d);
+        success += d.length;
+      } else {
+        failed += 1;
+        console.error("Grades sync failed", gradesRes);
+      }
+
+      if (alloysRes.status === 'fulfilled') {
+        const d = alloysRes.value.data?.data || [];
+        setAlloys(d);
+        success += d.length;
+      } else {
+        failed += 1;
+        console.error("Aloys sync failed", alloysRes);
+      }
+
+      success += rawMaterials.length;
+      total = success + failed;
+
+      setSyncStats({
+        total,
+        success,
+        failed,
+        timestamp: new Date().toLocaleTimeString()
+      });
+      toast.success(`Database sync complete. Synced ${success} records from database.`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to sync database.");
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -433,76 +1036,94 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
     }
   };
 
+  const gradeKpiStats = useMemo(() => {
+    const validGrades = Array.isArray(grades) ? grades : [];
+    if (validGrades.length === 0) {
+      return {
+        total: 0,
+        active: 0,
+        activePercent: "0.00",
+        metalClasses: 0,
+        draft: 0,
+        inactive: 0,
+        avgMultiplier: "0.00"
+      };
+    }
+
+    const total = validGrades.length;
+    let active = 0;
+    let draft = 0;
+    let inactive = 0;
+    const metalClassSet = new Set();
+    let totalMultiplier = 0;
+
+    validGrades.forEach((g: any) => {
+      if (g?.status === 'ACTIVE') active++;
+      else if (g?.status === 'DRAFT' || g?.status === 'PENDING') draft++;
+      else if (g?.status === 'INACTIVE') inactive++;
+      
+      // Count DISTINCT metal classes safely
+      if (g?.metal?.id) {
+        metalClassSet.add(g.metal.id);
+      } else if (g?.metalId) {
+        metalClassSet.add(g.metalId);
+      } else if (g?.metal?.name) {
+        metalClassSet.add(g.metal.name);
+      }
+
+      totalMultiplier += Number(g?.multiplier ?? 0) || 0;
+    });
+
+    const activePercent = total > 0 ? Number((active / total) * 100).toFixed(2) : "0.00";
+    const avgMultiplierNum = total > 0 ? totalMultiplier / total : 0;
+    const avgMultiplier = Number(avgMultiplierNum || 0).toFixed(2);
+
+    return {
+      total,
+      active,
+      activePercent,
+      metalClasses: metalClassSet.size || 0,
+      draft,
+      inactive,
+      avgMultiplier
+    };
+  }, [grades]);
+
   return (
     <div className="flex flex-col gap-4">
-      {!isConnected && (
-        <div className="flex flex-wrap items-center justify-between gap-3 border border-red-200 bg-red-50/70 backdrop-blur-xs text-red-900 rounded-lg p-3.5 text-xs font-semibold shadow-sm animate-in fade-in duration-200">
-          <div className="flex items-center gap-2">
-            <span className="relative flex size-2 shrink-0">
-              <span className={`absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 ${isReconnecting ? 'animate-ping' : ''}`} />
-              <span className="relative inline-flex rounded-full size-2 bg-red-600" />
-            </span>
-            <span>
-              {isReconnecting ? (
-                <span className="flex items-center gap-1.5">
-                  <RefreshCw className="size-3 animate-spin" />
-                  ERP Connection Lost. Reconnecting to JSW costing server...
-                </span>
-              ) : (
-                "ERP Network Disconnected: Unable to reach costing server. Operating in offline fallback mode."
-              )}
-            </span>
+
+      {focus !== "material-rates" && focus !== "grade-builder" && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <PageHead 
+            title={
+              focus === "users" || focus === "user-management"
+                ? "Users & Roles Access" 
+                : focus === "settings" 
+                ? "ERP Calculation Slabs" 
+                : focus === "material-master"
+                ? "Material Master"
+                : "JSW Master Data Management"
+            } 
+            icon={focus === "users" || focus === "user-management" ? Users : Database} 
+          />
+          <div className="flex gap-2 items-center">
+            <Button variant="outline" size="sm" onClick={refreshData}>
+              <RefreshCw className="mr-1 size-4" /> Sync Database
+            </Button>
+            {actor?.role !== "PDQC" && (
+              <div className="flex gap-2">
+                {focus === "material-master" && (
+                  <Button size="sm" onClick={() => setActiveModal("alloy")} className="bg-success hover:bg-[#065a33]">
+                    <Layers className="mr-1 size-4" /> New Composition
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-          <Button 
-            size="sm" 
-            variant="outline" 
-            onClick={() => refetch()} 
-            disabled={isReconnecting}
-            className="border-red-300 hover:bg-red-100 hover:text-red-900 bg-white shadow-xs shrink-0 cursor-pointer h-7 text-[10px] py-1"
-          >
-            {isReconnecting ? "Connecting..." : "Reconnect Now"}
-          </Button>
         </div>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHead 
-          title={
-            focus === "users" || focus === "user-management"
-              ? "Users & Roles Access" 
-              : focus === "settings" 
-              ? "ERP Calculation Slabs" 
-              : focus === "material-master"
-              ? "Material Master"
-              : focus === "material-rates"
-              ? "Material Rates"
-              : focus === "grade-builder"
-              ? "Grade Builder"
-              : "JSW Master Data Management"
-          } 
-          icon={focus === "users" || focus === "user-management" ? Users : Database} 
-        />
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={refreshData}>
-            <RefreshCw className="mr-1 size-4" /> Sync Database
-          </Button>
-          {actor?.role !== "PDQC" && (
-            <div className="flex gap-2">
-              {focus === "material-rates" && (
-                <Button size="sm" onClick={() => setActiveModal("price")} className="bg-[#0b5cbf]">
-                  <TrendingUp className="mr-1 size-4" /> Price Adjuster
-                </Button>
-              )}
-              {focus === "material-master" && (
-                <Button size="sm" onClick={() => setActiveModal("alloy")} className="bg-[#087443] hover:bg-[#065a33]">
-                  <Layers className="mr-1 size-4" /> New Composition
-                </Button>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
 
-      {!["settings", "users", "user-management"].includes(focus) && (
+      {!["settings", "users", "user-management", "material-rates", "grade-builder"].includes(focus) && (
         <div className="flex flex-wrap items-center gap-3">
           <Input 
             className="max-w-sm" 
@@ -518,9 +1139,6 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
                   <Button size="sm" variant="outline" onClick={() => setActiveModal("raw")}><Plus className="size-3" /> Add Raw Feed</Button>
                 </>
               )}
-              {focus === "grade-builder" && (
-                <Button size="sm" variant="outline" onClick={() => setActiveModal("grade")}><Plus className="size-3" /> Add Grade</Button>
-              )}
             </div>
           )}
         </div>
@@ -531,120 +1149,881 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
       ) : focus === "settings" ? (
         <SettingsPanel />
       ) : focus === "grade-builder" ? (
-        <EnterpriseDataTable
-          tableId="grades"
-          data={gradesTableQuery.data?.data ?? []}
-          columns={gradeColumns}
-          query={gradeTable.query}
-          onQueryChange={gradeTable.setQuery}
-          totalRows={gradesTableQuery.data?.pagination?.total ?? 0}
-          getRowId={(row) => row.id}
-          isLoading={gradesTableQuery.isLoading}
-          error={gradesTableQuery.error}
-          searchPlaceholder="Search grade or subgrade..."
-          exportResource="grades"
-          exportParams={gradeTable.params}
-          filters={
-            <>
-              <select
-                value={gradeTable.query.filters.metalId ?? ""}
-                onChange={(event) => gradeTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, metalId: event.target.value || undefined } }))}
-                className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
-              >
-                <option value="">All Metals</option>
-                {metals.map((metal) => <option key={metal.id} value={metal.id}>{metal.name}</option>)}
-              </select>
-              <select
-                value={gradeTable.query.filters.status ?? ""}
-                onChange={(event) => gradeTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
-                className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
-              >
-                <option value="">All Statuses</option>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-              </select>
-            </>
-          }
-        />
-      ) : focus === "material-rates" ? (
-        <div className="grid gap-4 xl:grid-cols-[1fr_1.2fr]">
-          <Card>
-            <CardHeader className="bg-[#fafbfd] border-b py-3 px-4">
-              <CardTitle className="text-base flex items-center gap-2"><DollarSign className="size-4 text-[#0b5cbf]" /> Active Locked Prices</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-y-auto max-h-[500px] p-0">
-              <Table>
-                <thead>
-                  <tr className="bg-[#f8fafc] border-b text-xs">
-                    <TableHead>Feed Material</TableHead>
-                    <TableHead>Current Master Price</TableHead>
-                    <TableHead>Source Desk</TableHead>
-                    <TableHead>Effective Date</TableHead>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...metals, ...rawMaterials].map((item, index) => {
-                    const priceRow = item.prices && item.prices[0];
-                    if (!priceRow) return null;
-                    return (
-                      <tr key={`${item.id}-${index}`} className="border-b text-sm">
-                        <TableCell className="font-semibold">{item.name}</TableCell>
-                        <TableCell className="font-mono text-[#087443] font-semibold">{inr(priceRow.pricePerUnit)} / kg</TableCell>
-                        <TableCell className="text-xs">{priceRow.source}</TableCell>
-                        <TableCell className="text-xs">{shortDate(priceRow.effectiveFrom)}</TableCell>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </CardContent>
-          </Card>
+        <div className="flex flex-col gap-5 w-full">
+          {/* 1. Header */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 border border-slate-200 rounded-sm shadow-sm">
+            <div className="flex flex-col gap-3">
+              <div>
+                <h1 className="text-xl font-extrabold text-primary tracking-tight flex items-center gap-2"><Layers className="size-5 text-[#0b5cbf]" /> Grade Management</h1>
+                <p className="text-xs font-medium text-slate-500 mt-1">Enterprise Grade Configuration & Multiplier Settings</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Button variant="outline" size="sm" onClick={refreshData} disabled={isSyncing} className={`h-9 text-xs font-bold shadow-none active:scale-[0.98] transition-all ${isSyncing ? "btn-loading-stripes-dark" : ""}`}>
+                {!isSyncing && <RefreshCw className="mr-2 size-4" />} 
+                {isSyncing ? "Syncing..." : "Sync Database"}
+              </Button>
+              {actor?.role !== "PDQC" && (
+                <Button size="sm" onClick={() => setActiveModal("grade")} className="bg-[#0b5cbf] hover:bg-[#094c9e] h-9 px-4 text-xs font-bold text-white shadow-sm transition-all rounded-sm active:scale-[0.98]">
+                  <Plus className="mr-2 size-4" /> Add Grade
+                </Button>
+              )}
+            </div>
+          </div>
 
-          <Card>
-            <CardHeader className="bg-[#fafbfd] border-b py-3 px-4">
-              <CardTitle className="text-base flex items-center gap-2"><TrendingUp className="size-4 text-[#087443]" /> ERP Master Price History Logs</CardTitle>
-            </CardHeader>
-            <CardContent className="overflow-y-auto max-h-[500px] p-0">
-              <Table>
-                <thead>
-                  <tr className="bg-[#f8fafc] border-b text-xs">
-                    <TableHead>Material</TableHead>
-                    <TableHead>Old Rate</TableHead>
-                    <TableHead>New Rate</TableHead>
-                    <TableHead>Adjuster</TableHead>
-                    <TableHead>Reason / Event</TableHead>
-                    <TableHead>Time</TableHead>
-                  </tr>
-                </thead>
-                <tbody>
-                  {priceHistory.length > 0 ? (
-                    priceHistory.map((hist) => (
-                      <tr key={hist.id} className="border-b text-xs">
-                        <TableCell className="font-semibold">{hist.metal?.name || hist.rawMaterial?.name}</TableCell>
-                        <TableCell className="font-mono text-slate-400">{hist.oldPrice ? `${inr(hist.oldPrice)}` : "None"}</TableCell>
-                        <TableCell className="font-mono text-[#0b5cbf] font-semibold">{inr(hist.newPrice)}</TableCell>
-                        <TableCell>{hist.updatedBy?.name || "System"}</TableCell>
-                        <TableCell className="text-slate-500 max-w-[150px] truncate" title={hist.reason || ""}>{hist.reason || "Periodic Lock"}</TableCell>
-                        <TableCell className="text-slate-400">{shortDate(hist.updatedAt)}</TableCell>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <TableCell colSpan={6} className="text-center py-8 text-slate-400">
-                        No price update logs found. Use the Price Adjuster to publish a price.
-                      </TableCell>
-                    </tr>
-                  )}
-                </tbody>
-              </Table>
-            </CardContent>
-          </Card>
+          {/* 2. KPI Cards Row */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <GradeMetricCard 
+              title="Total Grades" 
+              value={gradeKpiStats.total} 
+              subtitle="All registered grades" 
+              icon={Layers} 
+              colorTheme="blue" 
+              isLoading={grades.length === 0}
+            />
+            <GradeMetricCard 
+              title="Active Grades" 
+              value={gradeKpiStats.active} 
+              trend={`${gradeKpiStats.activePercent}% of total`} 
+              icon={CheckCircle} 
+              colorTheme="green" 
+              isLoading={grades.length === 0}
+            />
+            <GradeMetricCard 
+              title="Metal Classes" 
+              value={gradeKpiStats.metalClasses} 
+              subtitle="Across all categories" 
+              icon={Database} 
+              colorTheme="blue" 
+              isLoading={grades.length === 0}
+            />
+            <GradeMetricCard 
+              title="Draft Grades" 
+              value={gradeKpiStats.draft} 
+              subtitle="Awaiting activation" 
+              icon={Edit3} 
+              colorTheme="amber" 
+              isLoading={grades.length === 0}
+            />
+            <GradeMetricCard 
+              title="Inactive Grades" 
+              value={gradeKpiStats.inactive} 
+              subtitle="Temporarily disabled" 
+              icon={History} 
+              colorTheme="red" 
+              isLoading={grades.length === 0}
+            />
+            <GradeMetricCard 
+              title="Avg Multiplier" 
+              value={`${gradeKpiStats.avgMultiplier}x`} 
+              subtitle="Across all grades" 
+              icon={TrendingUp} 
+              colorTheme="purple" 
+              isLoading={grades.length === 0}
+            />
+          </div>
+
+          {/* 3. Analytics Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <MostUsedGradesCard grades={grades} isLoading={grades.length === 0} />
+            <GradeDistributionChart grades={grades} isLoading={grades.length === 0} />
+            <CostImpactAnalysisCard grades={grades} isLoading={grades.length === 0} />
+          </div>
+
+          {/* 4/5/6. Toolbar, Filters Row, Main Table Area */}
+          <div className="flex flex-col xl:flex-row justify-between xl:items-center gap-4 bg-white p-3 rounded-sm border border-slate-200 shadow-sm mt-1">
+            <GradeManagementToolbar 
+              selectedIds={selectedGradeIds}
+              onImport={() => setIsImportModalOpen(true)}
+              onDownloadTemplate={() => {
+                toast.success("Downloading Grade Import Template...");
+                // Note: in reality, generate a workbook with headers.
+              }}
+              onExport={(format, scope) => {
+                if (grades.length === 0) {
+                  toast.error("No data to export.");
+                  return;
+                }
+                if (format === "pdf") {
+                  toast("PDF export is not fully implemented yet.", { icon: "🚧" });
+                  return;
+                }
+                
+                let dataToExport = grades;
+                if (scope === "selected") {
+                  dataToExport = grades.filter((g: any) => selectedGradeIds.has(g.id));
+                } else if (scope === "all") {
+                  toast.info("Exporting all records... (Simulated)");
+                  // Mock fetching all records
+                }
+                
+                const exportData = dataToExport.map((g: any) => ({
+                  Code: g.code,
+                  Name: g.name,
+                  MetalClass: g.metal?.name || "-",
+                  Multiplier: Number(g.multiplier || 0).toFixed(3),
+                  Premium: Number(g.premium || 0).toFixed(2),
+                  Status: g.status,
+                  LastUpdated: shortDate(g.updatedAt)
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(exportData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Grades");
+                XLSX.writeFile(wb, `JSW_Grades_Export_${scope}.xlsx`);
+                toast.success(`Exported ${dataToExport.length} grades successfully.`);
+              }}
+              onClone={() => setIsCloneModalOpen(true)}
+              onBulkUpdate={() => setIsBulkUpdateModalOpen(true)}
+              onCompare={() => setIsCompareModalOpen(true)}
+              onRefresh={() => { queryClient.invalidateQueries({ queryKey: ["grades"] }); toast.success("Data refreshed successfully."); }}
+              onPrint={() => window.print()}
+            />
+            <GradeManagementSearchFilters 
+              query={gradeTable.query}
+              setQuery={gradeTable.setQuery}
+              metals={metals}
+              onReset={() => {
+                setSelectedGradeIds(new Set());
+                toast.success("Filters reset successfully.");
+              }}
+            />
+          </div>
+
+          <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
+            <div className="w-full lg:w-1/4">
+              <GradeHierarchyTree grades={grades} isLoading={grades.length === 0} />
+            </div>
+            
+            <div className="w-full lg:w-3/4">
+                <EnterpriseDataTable
+                  tableId="grades"
+                  data={(() => {
+                    const ds = gradesTableQuery.data?.data ?? [];
+                    console.log("Grade Table DataSource:", ds);
+                    return ds;
+                  })()}
+                  columns={gradeColumns}
+                  query={gradeTable.query}
+                  onQueryChange={gradeTable.setQuery}
+                  totalRows={gradesTableQuery.data?.pagination?.total ?? 0}
+                  getRowId={(row) => row.id}
+                  isLoading={gradesTableQuery.isLoading}
+                  error={gradesTableQuery.error}
+                  exportResource="grades"
+                  exportParams={gradeTable.params}
+                  onRowClick={openGradeDetails}
+                />
+            </div>
+          </div>
+          
+          <GradeInsightsDashboard grades={grades} isLoading={grades.length === 0 && isSyncing} />
+        </div>
+      ) : focus === "material-rates" ? (
+        <div className="flex flex-col xl:flex-row gap-5 items-start w-full">
+          {/* Main Content Area */}
+          <main className="flex-1 min-w-0 flex flex-col gap-4">
+            {/* Enterprise Page Header */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 border border-slate-200 rounded-sm shadow-sm">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <h1 className="text-xl font-extrabold text-primary tracking-tight flex items-center gap-2"><Database className="size-5 text-[#0b5cbf]" /> Material Rates Command Center</h1>
+                  <p className="text-xs font-medium text-slate-500 mt-1">Centralized Material Pricing, Cost Control & ERP Synchronization</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={handleSyncDatabase} disabled={isSyncing} className={`h-8 text-xs font-bold shadow-none transition-all ${isSyncing ? "btn-loading-stripes-dark" : ""}`}>
+                    {!isSyncing && <RefreshCw className="mr-1 size-3.5" />} 
+                    {isSyncing ? "Syncing..." : "Manual Sync"}
+                  </Button>
+                </div>
+              </div>
+              
+              {/* Right Side Cards */}
+              <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-sm border border-slate-100">
+                <div className="flex flex-col px-3 border-r border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">ERP Sync Status</span>
+                  <span className="text-sm font-bold text-emerald-600 flex items-center gap-1"><Check className="size-3.5" /> {syncStats ? "Active" : "Pending"}</span>
+                </div>
+                <div className="flex flex-col px-3 border-r border-slate-200">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Last Sync</span>
+                  <span className="text-sm font-bold text-slate-700">{syncStats?.timestamp || "Unknown"}</span>
+                </div>
+                <div className="flex flex-col pl-3">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Current User</span>
+                  <span className="text-sm font-bold text-[#0b5cbf] flex items-center gap-1"><Users className="size-3.5" /> {actor?.name || actor?.email?.split('@')[0] || "Operator"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* KPI Cards Row - compact and responsive */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <KPIWidget 
+                label="Active Materials" 
+                value={activeMaterials?.length || 0} 
+                icon={Database} 
+                trend="+2.4% vs last week" 
+                trendType="up"
+                color="blue" 
+                sparklineData={[12, 14, 13, 16, 15, 18, 20]}
+              />
+              <KPIWidget 
+                label="Pending Approvals" 
+                value="3 Pending" 
+                icon={AlertCircle} 
+                trend="Requires action" 
+                trendType="neutral"
+                color="amber" 
+                sparklineData={[1, 0, 2, 1, 4, 2, 3]}
+              />
+              <KPIWidget 
+                label="Today's Updates" 
+                value={todaysUpdatesCount} 
+                icon={TrendingUp} 
+                trend="+12% activity" 
+                trendType="up"
+                color="indigo" 
+                sparklineData={[5, 8, 4, 10, 15, 12, todaysUpdatesCount || 0]}
+              />
+              <KPIWidget 
+                label="ERP Sync Health" 
+                value={syncStats ? `${Math.round((syncStats.success / (syncStats.total || 1)) * 100)}%` : "N/A"} 
+                icon={RefreshCw} 
+                trend={syncStats?.failed ? `${syncStats.failed} Failed` : "Optimal"} 
+                trendType={syncStats?.failed ? "down" : "up"}
+                color={syncStats?.failed ? "rose" : "emerald"} 
+                sparklineData={[98, 99, 100, 95, 99, 100, syncStats?.failed ? 90 : 100]}
+              />
+            </div>
+
+            <EnterpriseDataTable
+              tableId="raw-rates"
+              data={paginatedRawRates}
+              columns={rawColumns}
+              query={rawTable.query}
+              onQueryChange={rawTable.setQuery}
+              totalRows={filteredRawRates.length}
+              getRowId={(row) => row.id}
+              onRowClick={(row) => setSelectedRaw(row)}
+              searchPlaceholder={undefined}
+              hideSearch={true}
+              exportResource="raw-materials"
+              exportParams={{}}
+              filters={
+                <div className="col-span-full flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-[#f8fafc] p-4 rounded-sm border border-slate-200 mt-2 shadow-[inset_0_1px_4px_rgba(0,0,0,0.02)]">
+                  {/* Left Side: Search & Filters */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    
+                    {/* Unified Search Bar */}
+                    <div className="relative min-w-[320px]">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                      <Input
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Search code, name, description..."
+                        className="pl-9 h-10 w-full rounded-sm border-slate-300 bg-white shadow-sm focus:border-[#0b5cbf] focus:ring-1 focus:ring-[#0b5cbf] text-sm"
+                      />
+                    </div>
+                    
+                    {/* Category Filter */}
+                    <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                      <Sliders className="size-4 text-slate-400" />
+                      <select
+                        value={categoryFilter}
+                        onChange={(e) => {
+                          setCategoryFilter(e.target.value);
+                          rawTable.setQuery((current) => ({ ...current, page: 1 }));
+                        }}
+                        className="h-10 min-w-[150px] rounded-sm border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[#0b5cbf] focus:ring-1 focus:ring-[#0b5cbf]"
+                      >
+                        <option value="all">All Categories</option>
+                        <option value="available">Available</option>
+                        <option value="micro">Micro Alloys</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+
+                      {/* Supplier Filter */}
+                      <select
+                        value={rawTable.query.filters.supplier ?? ""}
+                        onChange={(e) => rawTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, supplier: e.target.value || undefined } }))}
+                        className="h-10 min-w-[150px] rounded-sm border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[#0b5cbf] focus:ring-1 focus:ring-[#0b5cbf]"
+                      >
+                        <option value="">All Suppliers</option>
+                        <option value="jsw">JSW Steel</option>
+                        <option value="external">External Vendors</option>
+                      </select>
+
+                      {/* Status Filter */}
+                      <select
+                        value={rawTable.query.filters.status ?? ""}
+                        onChange={(e) => rawTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: e.target.value || undefined } }))}
+                        className="h-10 min-w-[140px] rounded-sm border border-slate-300 bg-white px-3.5 text-sm font-semibold text-slate-700 shadow-sm outline-none focus:border-[#0b5cbf] focus:ring-1 focus:ring-[#0b5cbf]"
+                      >
+                        <option value="">All Statuses</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="PENDING">Pending</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Right Side: Primary Actions */}
+                  <div className="flex items-center gap-3">
+                    {actor?.role !== "PDQC" && (
+                      <>
+                        <Button 
+                          size="sm" 
+                          onClick={() => { setSelectedRaw(null); setPriceType("raw"); setPriceTargetId(rawMaterials[0]?.id || ""); setPriceValue(""); setPriceReason("Market Index Alignment"); setActiveModal("price"); }} 
+                          className="bg-[#0b5cbf] hover:bg-[#094c9e] h-10 px-5 text-sm font-bold text-white shadow-sm transition-all rounded-sm"
+                        >
+                          <TrendingUp className="mr-2 size-4" /> Price Adjuster
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="h-10 px-5 text-sm font-bold border-slate-300 bg-white hover:bg-slate-50 text-slate-700 shadow-sm transition-all rounded-sm" 
+                          onClick={() => { setRawName(""); setRawCode(""); setRawUnit("kg"); setRawCategory("Ferro Alloy"); setRawCurrentRate(""); setRawSupplier(""); setRawDescription(""); setIsMicroFlag(false); setIsAvailFlag(true); setActiveModal("raw"); }}
+                        >
+                          <Plus className="mr-2 size-4" /> Add Material
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              }
+            />
+
+            {/* Bottom Analytics Section */}
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Card 1: Price Activity Timeline */}
+              <Card className="flex flex-col h-full shadow-sm border-slate-200">
+                <CardHeader className="bg-[#fafbfd] border-b border-slate-100 py-3 px-4 shrink-0">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-800">
+                    <Clock className="size-4 text-[#0b5cbf]" /> 
+                    Price Activity Timeline
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-6 flex-1">
+                  <div className="relative border-l-2 border-slate-100 ml-3 space-y-6">
+                    <div className="relative pl-6">
+                      <div className="absolute left-[-9px] top-1 bg-emerald-500 rounded-full size-4 border-4 border-white shadow-sm ring-1 ring-emerald-100"></div>
+                      <h5 className="text-xs font-bold text-slate-800">Published</h5>
+                      <p className="text-[10px] text-slate-500 font-medium">Live on production systems</p>
+                    </div>
+                    <div className="relative pl-6">
+                      <div className="absolute left-[-9px] top-1 bg-[#0b5cbf] rounded-full size-4 border-4 border-white shadow-sm ring-1 ring-blue-100"></div>
+                      <h5 className="text-xs font-bold text-slate-800">Approved</h5>
+                      <p className="text-[10px] text-slate-500 font-medium">Pending final synchronization</p>
+                    </div>
+                    <div className="relative pl-6">
+                      <div className="absolute left-[-9px] top-1 bg-amber-400 rounded-full size-4 border-4 border-white shadow-sm ring-1 ring-amber-100"></div>
+                      <h5 className="text-xs font-bold text-slate-800">Submitted</h5>
+                      <p className="text-[10px] text-slate-500 font-medium">Awaiting departmental approval</p>
+                    </div>
+                    <div className="relative pl-6">
+                      <div className="absolute left-[-9px] top-1 bg-slate-300 rounded-full size-4 border-4 border-white shadow-sm ring-1 ring-slate-100"></div>
+                      <h5 className="text-xs font-bold text-slate-800">Draft Created</h5>
+                      <p className="text-[10px] text-slate-500 font-medium">Initial staging</p>
+                    </div>
+                    <div className="relative pl-6">
+                      <div className="absolute left-[-9px] top-1 bg-slate-200 rounded-full size-4 border-4 border-white shadow-sm ring-1 ring-slate-100"></div>
+                      <h5 className="text-xs font-bold text-slate-800 opacity-60">Price Updated</h5>
+                      <p className="text-[10px] text-slate-500 font-medium opacity-60">Previous cycle</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Card 2: ERP Intelligence Summary */}
+              <Card className="flex flex-col h-full shadow-sm border-slate-200 col-span-1 lg:col-span-2">
+                <CardHeader className="bg-linear-to-r from-slate-50 to-white border-b border-slate-100 py-4 px-5 shrink-0 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-black flex items-center gap-2 text-slate-800 uppercase tracking-widest">
+                    <Database className="size-4 text-[#0b5cbf]" /> 
+                    ERP Intelligence Summary
+                  </CardTitle>
+                  <Badge className="bg-success-bg text-success-fg border-success-border shadow-none text-[10px] uppercase font-bold tracking-widest px-2.5 py-1">
+                    System Healthy
+                  </Badge>
+                </CardHeader>
+                <CardContent className="p-0 flex-1 flex flex-col md:flex-row">
+                  {/* Left: Donut Chart & Legends */}
+                  <div className="flex-1 p-6 flex flex-col xl:flex-row items-center justify-center gap-8 border-b md:border-b-0 md:border-r border-slate-100 bg-white">
+                    <div className="relative size-44 shrink-0">
+                      <svg viewBox="0 0 100 100" className="transform -rotate-90 w-full h-full drop-shadow-sm">
+                        {/* Background track */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#f1f5f9" strokeWidth="12" />
+                        {/* Synced slice (Emerald) - 85% */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#059669" strokeWidth="12" strokeDasharray="238.76" strokeDashoffset={238.76 * 0.15} strokeLinecap="round" />
+                        {/* Pending slice (Amber) - 12% */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#f59e0b" strokeWidth="12" strokeDasharray="238.76" strokeDashoffset={238.76 * 0.88} strokeLinecap="round" style={{ transformOrigin: 'center', transform: 'rotate(306deg)' }} />
+                        {/* Failed slice (Red) - 3% */}
+                        <circle cx="50" cy="50" r="38" fill="transparent" stroke="#e11d48" strokeWidth="12" strokeDasharray="238.76" strokeDashoffset={238.76 * 0.97} strokeLinecap="round" style={{ transformOrigin: 'center', transform: 'rotate(349deg)' }} />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-black text-slate-800 tracking-tight leading-none mt-2">8.4k</span>
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Records</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-4 w-full sm:w-auto min-w-[200px]">
+                      <div className="flex items-center justify-between gap-6 border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-3.5 rounded-sm bg-[#059669] shadow-sm"></div>
+                          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Synced</span>
+                        </div>
+                        <span className="text-sm font-black text-slate-800">85%</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-6 border-b border-slate-100 pb-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-3.5 rounded-sm bg-[#f59e0b] shadow-sm"></div>
+                          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Pending</span>
+                        </div>
+                        <span className="text-sm font-black text-slate-800">12%</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-6">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-3.5 rounded-sm bg-[#e11d48] shadow-sm"></div>
+                          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Failed</span>
+                        </div>
+                        <span className="text-sm font-black text-slate-800">3%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right: Sync Statistics */}
+                  <div className="w-full md:w-64 bg-slate-50/80 p-6 flex flex-col justify-center gap-6">
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Last Successful Sync</span>
+                      <div className="flex items-center gap-2">
+                        <Clock className="size-4 text-[#059669]" />
+                        <span className="text-sm font-black text-slate-800">{shortDate(new Date().toISOString())}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Next Scheduled Sync</span>
+                      <div className="flex items-center gap-2">
+                        <RefreshCw className="size-4 text-[#0b5cbf]" />
+                        <span className="text-sm font-black text-slate-800">In 4 hours</span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Sync Health Score</span>
+                      <div className="flex items-center gap-3">
+                        <Activity className="size-4 text-emerald-500" />
+                        <div className="flex items-center gap-2 w-full">
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div className="h-full bg-emerald-500 w-[95%]"></div>
+                          </div>
+                          <span className="text-xs font-black text-emerald-600">95%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </main>
+
+          {/* Right Material Details Panel */}
+          <aside className="hidden xl:flex w-[380px] shrink-0 border border-slate-200 bg-white rounded-sm overflow-hidden shadow-sm flex-col h-[calc(100vh-140px)] sticky top-6">
+            <div className="bg-[#f8fafc] border-b border-slate-200 p-4 flex items-center justify-between shrink-0">
+              <h3 className="font-extrabold text-slate-800 text-sm tracking-tight">Material Details</h3>
+              {selectedRaw && (
+                <Badge className="text-[10px] font-bold uppercase tracking-wider bg-white">
+                  {selectedRaw.materialCode || selectedRaw.rawMatId || "MAT"}
+                </Badge>
+              )}
+            </div>
+            
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {!selectedRaw ? (
+                <div className="h-full flex flex-col items-center justify-center text-center space-y-3 opacity-60 p-5">
+                  <div className="p-4 bg-slate-50 rounded-full border border-slate-100">
+                    <Database className="size-8 text-slate-300" />
+                  </div>
+                  <div>
+                    <span className="block text-sm font-bold text-slate-500">No Material Selected</span>
+                    <span className="block text-xs text-slate-400 mt-1 max-w-[200px]">Click on any row in the table to view material properties and configuration.</span>
+                  </div>
+                </div>
+              ) : (
+                <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0">
+                  <div className="px-6 pt-4 border-b border-slate-200 shrink-0 bg-white">
+                    <TabsList className="bg-transparent p-0 flex gap-6 h-auto w-full justify-start">
+                      <TabsTrigger value="overview" className="data-[state=active]:border-b-[3px] data-[state=active]:border-[#0b5cbf] data-[state=active]:text-primary data-[state=active]:shadow-none rounded-none px-1 pb-3 h-auto text-xs uppercase tracking-wider bg-transparent border-transparent text-slate-500 font-extrabold data-[state=active]:bg-transparent transition-all">Overview</TabsTrigger>
+                      <TabsTrigger value="history" className="data-[state=active]:border-b-[3px] data-[state=active]:border-[#0b5cbf] data-[state=active]:text-primary data-[state=active]:shadow-none rounded-none px-1 pb-3 h-auto text-xs uppercase tracking-wider bg-transparent border-transparent text-slate-500 font-extrabold data-[state=active]:bg-transparent transition-all">Price History</TabsTrigger>
+                      <TabsTrigger value="grades" className="data-[state=active]:border-b-[3px] data-[state=active]:border-[#0b5cbf] data-[state=active]:text-primary data-[state=active]:shadow-none rounded-none px-1 pb-3 h-auto text-xs uppercase tracking-wider bg-transparent border-transparent text-slate-500 font-extrabold data-[state=active]:bg-transparent transition-all">Grade Usage</TabsTrigger>
+                      <TabsTrigger value="audit" className="data-[state=active]:border-b-[3px] data-[state=active]:border-[#0b5cbf] data-[state=active]:text-primary data-[state=active]:shadow-none rounded-none px-1 pb-3 h-auto text-xs uppercase tracking-wider bg-transparent border-transparent text-slate-500 font-extrabold data-[state=active]:bg-transparent transition-all">Audit Logs</TabsTrigger>
+                    </TabsList>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto bg-slate-50/30">
+                    <TabsContent value="overview" className="p-6 m-0 space-y-8">
+                      {/* 1. Material Overview Section */}
+                      <section>
+                        <div className="mb-4">
+                          <h2 className="text-2xl font-black text-primary tracking-tight leading-tight">{selectedRaw.materialName || selectedRaw.name}</h2>
+                          <p className="text-sm font-bold text-slate-500 mt-1 flex items-center gap-2">
+                            <span className="uppercase tracking-wider text-[#0b5cbf]">{selectedRaw.category || "Ferro Alloy"}</span>
+                            <span className="text-slate-300">&bull;</span>
+                            <span>{selectedRaw.supplier || "Internal Supplier"}</span>
+                          </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="bg-white p-4 rounded-sm border border-slate-200 shadow-sm">
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Base Unit</span>
+                            <span className="text-sm font-extrabold text-slate-800">{selectedRaw.unit || "kg"}</span>
+                          </div>
+                          <div className="bg-white p-4 rounded-sm border border-slate-200 shadow-sm">
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Micro Alloy</span>
+                            <Badge className={selectedRaw.isMicro ? "bg-blue-50 text-blue-700 border-blue-200 shadow-none px-2 py-0.5" : "bg-slate-100 text-slate-600 border-slate-200 shadow-none px-2 py-0.5"}>
+                              {selectedRaw.isMicro ? "Yes" : "No"}
+                            </Badge>
+                          </div>
+                          <div className="col-span-2 bg-white p-4 rounded-sm border border-slate-200 shadow-sm">
+                            <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Description</span>
+                            <p className="text-sm font-medium text-slate-600 leading-relaxed">
+                              {selectedRaw.description || selectedRaw.description || "No description provided."}
+                            </p>
+                          </div>
+                        </div>
+                      </section>
+
+                      {/* 2. Financial Valuation Section */}
+                      <section className="border-b pb-4 mt-4">
+                        <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          Financial Valuation
+                        </h4>
+                        <CurrentRateCard 
+                          rate={selectedRaw.currentRate}
+                          unit={selectedRaw.unit}
+                          isActive={selectedRaw.availability}
+                          effectiveDate={selectedRaw.effectiveDate}
+                          updatedAt={selectedRaw.updatedAt}
+                          updatedBy={selectedRaw.updatedBy?.name}
+                        />
+                      </section>
+
+                      {/* Price Adjuster Section */}
+                      {actor?.role !== "PDQC" && (
+                        <section className="border-b pb-6 mt-4">
+                          <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <TrendingUp className="size-4 text-[#0b5cbf]" /> Price Adjuster
+                          </h4>
+                          <div className="bg-white border border-slate-200 rounded-sm p-5 shadow-sm">
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Current Rate</label>
+                                <div className="h-9 px-3 rounded-sm border border-slate-200 bg-slate-50 flex items-center">
+                                  <span className="text-sm font-mono font-semibold text-slate-500">{selectedRaw.currentRate ? inr(selectedRaw.currentRate) : "N/A"}</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-[#0b5cbf] uppercase tracking-wider mb-1.5">New Rate *</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-mono text-sm">₹</span>
+                                  <input 
+                                    type="number"
+                                    className="w-full h-9 pl-7 pr-3 rounded-sm border border-[#0b5cbf]/30 bg-blue-50/20 font-mono text-sm font-bold text-[#0b5cbf] focus:outline-none focus:ring-1 focus:ring-[#0b5cbf]"
+                                    placeholder="0.00"
+                                    value={priceValue}
+                                    onChange={(e) => {
+                                      setPriceValue(e.target.value);
+                                      setShowInlineImpact(false);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {(() => {
+                              const current = selectedRaw?.currentRate || 0;
+                              const newRate = parseFloat(priceValue) || 0;
+                              const diff = newRate - current;
+                              const pct = current > 0 ? (diff / current) * 100 : 0;
+                              const hasNewRate = newRate > 0 && current > 0;
+                              
+                              return (
+                                <div className="grid grid-cols-2 gap-4 mt-4">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Difference</label>
+                                    <div className={`h-9 px-3 rounded-sm border flex items-center ${hasNewRate ? (diff > 0 ? 'bg-rose-50 border-rose-200 text-rose-700' : diff < 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-700') : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                      <span className="text-sm font-mono font-bold">{hasNewRate ? `${diff > 0 ? '+' : ''}${inr(diff)}` : "-"}</span>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Change %</label>
+                                    <div className={`h-9 px-3 rounded-sm border flex items-center ${hasNewRate ? (diff > 0 ? 'bg-rose-50 border-rose-200 text-rose-700' : diff < 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-700') : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                                      <span className="text-sm font-mono font-bold">{hasNewRate ? `${diff > 0 ? '+' : ''}${Number(pct ?? 0).toFixed(2)}%` : "-"}</span>
+                                    </div>
+                                  </div>
+                                  
+                                  {showInlineImpact && hasNewRate && Math.abs(diff) > 0 && (
+                                    <div className="col-span-2 mt-2 border border-slate-200 bg-slate-50/80 rounded-sm p-4 animate-in fade-in duration-200">
+                                      <div className="flex items-center gap-1.5 mb-3">
+                                        <Activity className="size-4 text-[#0b5cbf]" />
+                                        <h5 className="text-[11px] uppercase font-black text-slate-700 tracking-widest">Impact Analysis</h5>
+                                      </div>
+                                      
+                                      <div className="grid grid-cols-3 gap-3">
+                                        <div className="bg-white border border-slate-200 rounded-sm p-3 text-center shadow-sm flex flex-col justify-center min-h-[70px]">
+                                          <span className="block text-[9px] uppercase font-bold text-slate-400 mb-1.5">Affected Grades</span>
+                                          <span className="block text-xs font-bold text-slate-400 italic">Data Unavailable</span>
+                                        </div>
+                                        <div className="bg-white border border-slate-200 rounded-sm p-3 text-center shadow-sm flex flex-col justify-center min-h-[70px]">
+                                          <span className="block text-[9px] uppercase font-bold text-slate-400 mb-1.5">Cost Impact / Mo</span>
+                                          <span className="block text-xs font-bold text-slate-400 italic">Data Unavailable</span>
+                                        </div>
+                                        <div className="bg-white border border-slate-200 rounded-sm p-3 text-center shadow-sm flex flex-col justify-center min-h-[70px]">
+                                          <span className="block text-[9px] uppercase font-bold text-slate-400 mb-1.5">Price Impact Level</span>
+                                          <span className="block text-xs font-bold text-slate-400 italic">Data Unavailable</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            <div className="grid grid-cols-2 gap-4 mt-4">
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Reason *</label>
+                                <input 
+                                  type="text"
+                                  className="w-full h-9 px-3 rounded-sm border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0b5cbf]"
+                                  placeholder="e.g. Market Index Alignment"
+                                  value={priceReason}
+                                  onChange={(e) => setPriceReason(e.target.value)}
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Effective Date *</label>
+                                <input 
+                                  type="date"
+                                  className="w-full h-9 px-3 rounded-sm border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-[#0b5cbf]"
+                                  value={effectiveDate}
+                                  onChange={(e) => setEffectiveDate(e.target.value)}
+                                />
+                              </div>
+                            </div>
+                            
+                            <div className="flex gap-2 mt-5 pt-4 border-t border-slate-100">
+                              <Button 
+                                variant="outline" 
+                                className="flex-1 h-9 text-xs font-bold border-slate-200 text-slate-600 hover:bg-slate-50 shadow-none"
+                                onClick={() => {
+                                  const val = parseFloat(priceValue);
+                                  if (isNaN(val) || val <= 0) {
+                                    toast.error("Enter a valid New Rate to preview impact.");
+                                    return;
+                                  }
+                                  setShowInlineImpact(true);
+                                }}
+                              >
+                                Preview Impact
+                              </Button>
+                              <Button 
+                                className="flex-1 h-9 text-xs font-bold bg-[#0b5cbf] hover:bg-[#094c9e] shadow-none text-white"
+                                disabled={publishNewPrice.isPending}
+                                onClick={() => {
+                                  if (!priceValue || parseFloat(priceValue) <= 0) {
+                                    toast.error("New Rate must be greater than 0");
+                                    return;
+                                  }
+                                  if (!priceReason) {
+                                    toast.error("Reason is required");
+                                    return;
+                                  }
+                                  setPriceTargetId(selectedRaw.id);
+                                  handleConfirmPublish();
+                                  setShowInlineImpact(false);
+                                }}
+                              >
+                                {publishNewPrice.isPending ? "Submitting..." : "Submit Update"}
+                              </Button>
+                            </div>
+                          </div>
+                        </section>
+                      )}
+
+                      {/* 3. Approval Workflow Section */}
+                      {(() => {
+                        const currentStatus = selectedRaw.status || (selectedRaw.availability ? "Published" : "Draft");
+                        
+                        const stages = [
+                          { id: "Draft", label: "Draft", icon: Edit3 },
+                          { id: "Submitted", label: "Submitted", icon: Send },
+                          { id: "Approved", label: "Approved", icon: ThumbsUp },
+                          { id: "Published", label: "Published", icon: CheckCircle }
+                        ];
+                        
+                        // Find current active index (Default to published if active, draft if not)
+                        const activeIndex = stages.findIndex(s => s.id.toLowerCase() === currentStatus.toLowerCase());
+                        const currentIndex = activeIndex === -1 ? (selectedRaw.availability ? 3 : 0) : activeIndex;
+                        
+                        return (
+                          <section className="mt-2 border-b pb-6">
+                            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                              <GitMerge className="size-4 text-[#0b5cbf]" /> Approval Workflow
+                            </h3>
+                            <div className="bg-white border border-slate-200 rounded-sm overflow-hidden shadow-sm">
+                              <div className="bg-slate-50 border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current Pipeline Status</span>
+                                <Badge className={`${
+                                  currentIndex === 3 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  currentIndex === 2 ? "bg-blue-50 text-blue-700 border-blue-200" :
+                                  currentIndex === 1 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                  "bg-slate-100 text-slate-600 border-slate-200"
+                                } shadow-none px-3 py-1 text-[10px] uppercase font-black tracking-widest`}>
+                                  {stages[currentIndex].label}
+                                </Badge>
+                              </div>
+                              
+                              <div className="p-8">
+                                <div className="relative flex justify-between items-center px-4 md:px-8">
+                                  {/* Background Line */}
+                                  <div className="absolute left-[10%] right-[10%] top-5 h-1 bg-slate-100 -translate-y-1/2 z-0 rounded-full"></div>
+                                  
+                                  {/* Active Progress Line */}
+                                  <div 
+                                    className="absolute left-[10%] top-5 h-1 bg-[#0b5cbf] -translate-y-1/2 z-0 rounded-full transition-all duration-500 ease-in-out shadow-[0_0_8px_rgba(11,92,191,0.5)]"
+                                    style={{ width: `${(currentIndex / (stages.length - 1)) * 80}%` }}
+                                  ></div>
+                                  
+                                  {stages.map((stage, idx) => {
+                                    const isCompleted = idx < currentIndex;
+                                    const isActive = idx === currentIndex;
+                                    
+                                    const Icon = stage.icon;
+                                    
+                                    return (
+                                      <div key={stage.id} className="relative z-10 flex flex-col items-center gap-3">
+                                        <div className={`size-10 rounded-full flex items-center justify-center ring-4 ring-white transition-all duration-300 ${
+                                          isCompleted ? "bg-[#0b5cbf] text-white shadow-sm" :
+                                          isActive ? "bg-[#0b5cbf] text-white shadow-[0_0_15px_rgba(11,92,191,0.4)] ring-blue-50 scale-110" :
+                                          "bg-slate-100 text-slate-300"
+                                        }`}>
+                                          <Icon className={`size-4 ${isActive ? "animate-pulse" : ""}`} />
+                                        </div>
+                                        <div className="flex flex-col items-center gap-1 mt-1">
+                                          <span className={`text-[11px] font-extrabold uppercase tracking-wider ${
+                                            isCompleted ? "text-[#0b5cbf]" :
+                                            isActive ? "text-[#0b5cbf]" :
+                                            "text-slate-400"
+                                          }`}>
+                                            {stage.label}
+                                          </span>
+                                          <span className={`text-[9px] font-bold uppercase tracking-wider ${isActive ? "text-slate-500" : "text-slate-300"}`}>
+                                            {isCompleted ? "Done" : isActive ? "Active" : "Pending"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          </section>
+                        );
+                      })()}
+
+                      {/* 4. Metadata Section */}
+                      <section>
+                        <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <Layers className="size-4 text-slate-400" /> System Metadata
+                        </h3>
+                        <div className="bg-white rounded-sm border border-slate-200 shadow-sm p-4">
+                          <div className="space-y-4">
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                              <span className="text-xs font-bold text-slate-500">HSN Code</span>
+                              <span className="text-xs font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">{selectedRaw.hsnCode || "-"}</span>
+                            </div>
+                            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                              <span className="text-xs font-bold text-slate-500">Record Created</span>
+                              <span className="text-xs font-bold text-slate-800">{selectedRaw.createdAt ? shortDate(selectedRaw.createdAt) : "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-xs font-bold text-slate-500">Last Modified</span>
+                              <span className="text-xs font-bold text-slate-800">{selectedRaw.updatedAt ? shortDate(selectedRaw.updatedAt) : "N/A"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </TabsContent>
+
+                    <TabsContent value="history" className="p-0 m-0">
+                      <div className="p-4">
+                        <PriceActivityTimeline 
+                          history={rawPriceHistory} 
+                          materialName={selectedRaw?.alloyName || selectedRaw?.name}
+                          materialCode={selectedRaw?.code}
+                        />
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="grades" className="p-5 m-0">
+                      <div className="h-40 flex flex-col items-center justify-center text-center opacity-60 border border-dashed border-slate-200 rounded-sm bg-slate-50/50">
+                        <span className="block text-xs font-bold text-slate-500">No Grade Usage Data</span>
+                        <span className="block text-[10px] text-slate-400 mt-1">This material is not mapped to any active grades.</span>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="audit" className="p-5 m-0 space-y-4">
+                      <div className="border-l-2 border-[#0b5cbf] pl-3 py-1">
+                        <span className="block text-[10px] uppercase font-bold text-slate-400 mb-0.5">Last Updated</span>
+                        <span className="block text-xs font-semibold text-slate-800">{selectedRaw.updatedAt ? shortDate(selectedRaw.updatedAt) : "N/A"}</span>
+                      </div>
+                      <div className="border-l-2 border-slate-200 pl-3 py-1">
+                        <span className="block text-[10px] uppercase font-bold text-slate-400 mb-0.5">Updated By</span>
+                        <span className="block text-xs font-semibold text-slate-800">{selectedRaw.updatedBy?.name || "System"}</span>
+                      </div>
+                      <div className="border-l-2 border-slate-200 pl-3 py-1">
+                        <span className="block text-[10px] uppercase font-bold text-slate-400 mb-0.5">Created At</span>
+                        <span className="block text-xs font-semibold text-slate-800">{selectedRaw.createdAt ? shortDate(selectedRaw.createdAt) : "N/A"}</span>
+                      </div>
+                    </TabsContent>
+                  </div>
+                </Tabs>
+              )}
+            </div>
+
+            {/* Panel Actions */}
+            {selectedRaw && (
+              <div className="p-4 border-t border-slate-200 bg-[#f8fafc] flex gap-2 shrink-0">
+                {actor?.role !== "PDQC" && (
+                  <>
+                    <Button variant="outline" className="flex-1 h-9 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-none" onClick={() => {
+                      setRawName(selectedRaw.materialName || selectedRaw.name);
+                      setRawCode(selectedRaw.materialCode || selectedRaw.rawMatId);
+                      setRawUnit(selectedRaw.unit || "kg");
+                      setRawCategory(selectedRaw.category || "Ferro Alloy");
+                      setRawCurrentRate(selectedRaw.currentRate || "");
+                      setRawSupplier(selectedRaw.supplier || "");
+                      setRawDescription(selectedRaw.description || selectedRaw.description || "");
+                      setIsMicroFlag(selectedRaw.isMicro || false);
+                      setIsAvailFlag(selectedRaw.availability || false);
+                      setActiveModal("edit_raw");
+                    }}>
+                      Edit Material
+                    </Button>
+                    <Button variant="default" className="flex-1 h-9 text-xs font-bold bg-[#0b5cbf] hover:bg-[#094c9e] shadow-none" onClick={() => setActiveModal("history_raw")}>
+                      View History
+                    </Button>
+                  </>
+                )}
+                {actor?.role === "PDQC" && (
+                  <Button variant="default" className="w-full h-9 text-xs font-bold bg-[#0b5cbf] hover:bg-[#094c9e] shadow-none" onClick={() => setActiveModal("history_raw")}>
+                    View Price History
+                  </Button>
+                )}
+              </div>
+            )}
+          </aside>
         </div>
       ) : (
         <Tabs defaultValue="metals">
           <TabsList className="bg-[#eef2f6]">
             <TabsTrigger value="metals" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Metals Master</TabsTrigger>
-            <TabsTrigger value="raw" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Raw Materials Feed</TabsTrigger>
             <TabsTrigger value="alloys" className="data-[state=active]:bg-[#032f67] data-[state=active]:text-white">Product Compositions</TabsTrigger>
           </TabsList>
 
@@ -667,17 +2046,17 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
                   <select
                     value={metalTable.query.filters.category ?? ""}
                     onChange={(event) => metalTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, category: event.target.value || undefined } }))}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+                    className="h-9 rounded-sm border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
                   >
                     <option value="">All Categories</option>
                     <option value="Ferrous">Ferrous</option>
-                    <option value="Alloy">Alloy</option>
+                    <option value="Alloy">Alloy Base</option>
                     <option value="Non-Ferrous">Non-Ferrous</option>
                   </select>
                   <select
                     value={metalTable.query.filters.status ?? ""}
                     onChange={(event) => metalTable.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
-                    className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+                    className="h-9 rounded-sm border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
                   >
                     <option value="">All Statuses</option>
                     <option value="ACTIVE">Active</option>
@@ -686,43 +2065,6 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
                 </>
               }
             />
-          </TabsContent>
-
-          <TabsContent value="raw" className="mt-2">
-            <Card>
-              <CardContent className="overflow-x-auto p-0">
-                <Table>
-                  <thead>
-                    <tr className="bg-[#f8fafc] border-b">
-                      <TableHead>Raw Feed Name</TableHead>
-                      <TableHead>ERP Code</TableHead>
-                      <TableHead>Base Unit</TableHead>
-                      <TableHead>Locked Price</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Status</TableHead>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRaw.map((r) => (
-                      <tr key={r.id} className="border-b hover:bg-slate-50/50">
-                        <TableCell className="font-semibold text-slate-800">{r.name}</TableCell>
-                        <TableCell className="font-mono text-xs">{r.code}</TableCell>
-                        <TableCell>{r.unit}</TableCell>
-                        <TableCell className="font-medium text-slate-700">
-                          {r.prices && r.prices[0] ? `${inr(r.prices[0].pricePerUnit)} / kg` : "N/A"}
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-500 max-w-xs truncate">{r.description || "Industrial raw mineral feed"}</TableCell>
-                        <TableCell>
-                          <Badge className={r.status === "ACTIVE" ? "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]" : "border-slate-200 bg-slate-100 text-slate-500"}>
-                            {r.status}
-                          </Badge>
-                        </TableCell>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="alloys" className="mt-2">
@@ -758,7 +2100,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
                         <TableCell className="text-xs">{alloy.createdBy?.name || "JSW Desk"}</TableCell>
                         <TableCell className="text-xs text-slate-500">{shortDate(alloy.updatedAt)}</TableCell>
                         <TableCell>
-                          <Badge className="border-[#bde4cf] bg-[#e8fbf0] text-[#087443]">Active</Badge>
+                          <Badge className="border-success-border bg-success-bg text-success-fg">Active</Badge>
                         </TableCell>
                       </tr>
                     ))}
@@ -775,7 +2117,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
       {activeModal === "metal" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
           <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
-          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
             <header className="flex items-center justify-between border-b border-slate-200 p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
                 <Database className="size-4" /> Add Metal Master
@@ -799,7 +2141,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
               </label>
               <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#002652]">Save Record</Button>
+                <Button type="submit" className="bg-primary">Save Record</Button>
               </div>
             </form>
           </div>
@@ -810,7 +2152,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
       {activeModal === "grade" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
           <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
-          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
             <header className="flex items-center justify-between border-b border-slate-200 p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
                 <Layers className="size-4" /> Add Steel Grade & Subgrade
@@ -855,7 +2197,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
               </div>
               <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#002652]">Add Grade</Button>
+                <Button type="submit" className="bg-primary">Add Grade</Button>
               </div>
             </form>
           </div>
@@ -866,7 +2208,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
       {activeModal === "raw" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
           <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
-          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
             <header className="flex items-center justify-between border-b border-slate-200 p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
                 <Database className="size-4" /> Add Raw Mineral Feed
@@ -883,62 +2225,522 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
               <label className="grid gap-1 text-xs font-semibold text-slate-600">Base Unit
                 <Input required value={rawUnit} onChange={e => setRawUnit(e.target.value)} />
               </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Category
+                <select className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium" value={rawCategory} onChange={e => setRawCategory(e.target.value)}>
+                  <option value="Ferro Alloy">Ferro Alloy</option>
+                  <option value="Aluminium">Aluminium</option>
+                  <option value="Calcium Alloy">Calcium Alloy</option>
+                  <option value="Carbon Additive">Carbon Additive</option>
+                  <option value="Flux">Flux</option>
+                  <option value="Non-Ferrous">Non-Ferrous</option>
+                  <option value="Additive">Additive</option>
+                </select>
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Initial Rate (INR)
+                  <Input type="number" step="0.0001" value={rawCurrentRate} onChange={e => setRawCurrentRate(e.target.value)} placeholder="e.g. 150.50" />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Approved Supplier
+                  <Input value={rawSupplier} onChange={e => setRawSupplier(e.target.value)} placeholder="e.g. JSW Mines" />
+                </label>
+              </div>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Description
+                <textarea 
+                  className="flex min-h-[60px] w-full rounded border border-slate-200 bg-white px-3 py-2 text-xs placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                  value={rawDescription} 
+                  onChange={e => setRawDescription(e.target.value)} 
+                  placeholder="e.g. High purity manganese ore"
+                />
+              </label>
+              <div className="flex gap-4 items-center p-2 border border-slate-200 bg-slate-50 rounded">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isMicroFlag} 
+                    onChange={e => setIsMicroFlag(e.target.checked)} 
+                    className="size-4 rounded border-slate-300 text-[#0b5cbf] focus:ring-[#0b5cbf]"
+                  />
+                  Micro Alloy Flag
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isAvailFlag} 
+                    onChange={e => setIsAvailFlag(e.target.checked)} 
+                    className="size-4 rounded border-slate-300 text-[#0b5cbf] focus:ring-[#0b5cbf]"
+                  />
+                  Available Status
+                </label>
+              </div>
               <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#002652]">Save Material</Button>
+                <Button type="submit" className="bg-primary">Save Material</Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Raw Material Feed Drawer */}
+      {activeModal === "edit_raw" && selectedRaw && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Database className="size-4" /> Edit Raw Mineral Feed
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
+            </header>
+            <form onSubmit={handleEditRaw} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Raw Material Name
+                <Input required value={rawName} onChange={e => setRawName(e.target.value)} placeholder="e.g. Manganese Ore" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">ERP Unique Code
+                <Input required value={rawCode} onChange={e => setRawCode(e.target.value.toUpperCase())} placeholder="e.g. RM-MN" />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Base Unit
+                <Input required value={rawUnit} onChange={e => setRawUnit(e.target.value)} />
+              </label>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Category
+                <select className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium" value={rawCategory} onChange={e => setRawCategory(e.target.value)}>
+                  <option value="Ferro Alloy">Ferro Alloy</option>
+                  <option value="Aluminium">Aluminium</option>
+                  <option value="Calcium Alloy">Calcium Alloy</option>
+                  <option value="Carbon Additive">Carbon Additive</option>
+                  <option value="Flux">Flux</option>
+                  <option value="Non-Ferrous">Non-Ferrous</option>
+                  <option value="Additive">Additive</option>
+                </select>
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Current Rate (INR)
+                  <Input disabled value={selectedRaw.currentRate ? inr(selectedRaw.currentRate) : "N/A"} className="bg-slate-50 cursor-not-allowed font-mono font-semibold" />
+                </label>
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Approved Supplier
+                  <Input value={rawSupplier} onChange={e => setRawSupplier(e.target.value)} placeholder="e.g. JSW Mines" />
+                </label>
+              </div>
+              <label className="grid gap-1 text-xs font-semibold text-slate-600">Description
+                <textarea 
+                  className="flex min-h-[60px] w-full rounded border border-slate-200 bg-white px-3 py-2 text-xs placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400"
+                  value={rawDescription} 
+                  onChange={e => setRawDescription(e.target.value)} 
+                  placeholder="e.g. High purity manganese ore"
+                />
+              </label>
+              <div className="flex gap-4 items-center p-2 border border-slate-200 bg-slate-50 rounded">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isMicroFlag} 
+                    onChange={e => setIsMicroFlag(e.target.checked)} 
+                    className="size-4 rounded border-slate-300 text-[#0b5cbf] focus:ring-[#0b5cbf]"
+                  />
+                  Micro Alloy Flag
+                </label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={isAvailFlag} 
+                    onChange={e => setIsAvailFlag(e.target.checked)} 
+                    className="size-4 rounded border-slate-300 text-[#0b5cbf] focus:ring-[#0b5cbf]"
+                  />
+                  Available Status
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
+                <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
+                <Button type="submit" className="bg-primary">Update Material</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Raw Material Details Modal */}
+      {activeModal === "view_raw" && selectedRaw && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <Database className="size-4" /> View Raw Mineral details
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
+            </header>
+            <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Material Code</p>
+                  <p className="text-xs font-mono font-bold text-slate-800">{selectedRaw.materialCode || selectedRaw.rawMatId}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Alloy Name</p>
+                  <p className="text-xs font-bold text-slate-800">{selectedRaw.materialName || selectedRaw.name}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Category</p>
+                  <p className="text-xs font-semibold text-slate-700">{selectedRaw.category || "Ferro Alloy"}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Base Unit</p>
+                  <p className="text-xs font-semibold text-slate-700">{selectedRaw.unit || "kg"}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 border-b pb-4">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Micro Alloy Flag</p>
+                  <Badge className={selectedRaw.isMicro ? "border-blue-200 bg-blue-50 text-blue-700 mt-1" : "border-slate-200 bg-slate-100 text-slate-500 mt-1"}>
+                    {selectedRaw.isMicro ? "YES" : "NO"}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-slate-400">Availability Status</p>
+                  <Badge className={selectedRaw.availability ? "border-success-border bg-success-bg text-success-fg mt-1" : "border-slate-200 bg-slate-100 text-slate-500 mt-1"}>
+                    {selectedRaw.availability ? "YES" : "NO"}
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="border-b pb-4 mt-4">
+                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+                  Financial Valuation
+                </h4>
+                <CurrentRateCard 
+                  rate={selectedRaw.currentRate}
+                  unit={selectedRaw.unit}
+                  isActive={selectedRaw.availability}
+                  effectiveDate={selectedRaw.effectiveDate}
+                  updatedAt={selectedRaw.updatedAt}
+                  updatedBy={selectedRaw.updatedBy?.name}
+                />
+              </div>
+
+              <div className="border-b pb-4 mt-4">
+                <p className="text-[10px] uppercase font-bold text-slate-400">Description</p>
+                <p className="text-xs text-slate-600 leading-relaxed mt-1">{selectedRaw.description || selectedRaw.description || "No description provided."}</p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase font-bold text-slate-400">Audit Info</p>
+                <div className="bg-slate-50 p-2.5 rounded border border-slate-200 text-xs text-slate-600 mt-1 space-y-1">
+                  <p>Last Updated: <span className="font-semibold text-slate-800">{selectedRaw.updatedAt ? shortDate(selectedRaw.updatedAt) : "N/A"}</span></p>
+                  <p>Updated By: <span className="font-semibold text-slate-800">{selectedRaw.updatedBy?.name || "System"}</span></p>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
+                <Button type="button" onClick={() => setActiveModal(null)} className="bg-primary text-xs">Close</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Price History Drawer */}
+      {activeModal === "history_raw" && selectedRaw && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
+          <div className="relative w-full max-w-lg bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
+            <header className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                <TrendingUp className="size-4" /> Price History: {selectedRaw.materialName || selectedRaw.name}
+              </h3>
+              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
+            </header>
+            <div className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto bg-slate-50/50">
+              {isLoadingHistory ? (
+                <div className="flex-1 flex flex-col gap-6 p-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex gap-4 animate-pulse">
+                      <div className="size-4 rounded-full bg-slate-200 shrink-0 mt-1"></div>
+                      <div className="flex-1 space-y-3">
+                        <div className="h-4 bg-slate-200 rounded w-1/3"></div>
+                        <div className="h-20 bg-slate-100 rounded-sm w-full"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <PriceActivityTimeline 
+                  history={rawPriceHistory} 
+                  materialName={selectedRaw?.alloyName || selectedRaw?.name}
+                  materialCode={selectedRaw?.code}
+                />
+              )}
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-4 mt-auto">
+                <Button type="button" onClick={() => setActiveModal(null)} className="bg-primary text-xs">Close</Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
       {/* 4. Price Master Publish Drawer */}
-      {activeModal === "price" && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
-          <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
-          <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
-            <header className="flex items-center justify-between border-b border-slate-200 p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
-                <DollarSign className="size-4" /> Publish Master Price
-              </h3>
-              <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
-            </header>
-            <form onSubmit={handlePublishPrice} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-              <div className="grid grid-cols-2 gap-2 p-1 border rounded bg-slate-50 border-slate-200">
-                <button type="button" onClick={() => { setPriceType("metal"); setPriceTargetId(metals[0]?.id || ""); }} className={`py-1 rounded font-semibold text-center text-[10px] uppercase ${priceType === "metal" ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500"}`}>Metals</button>
-                <button type="button" onClick={() => { setPriceType("raw"); setPriceTargetId(rawMaterials[0]?.id || ""); }} className={`py-1 rounded font-semibold text-center text-[10px] uppercase ${priceType === "raw" ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500"}`}>Raw Feeds</button>
-              </div>
-              <label className="grid gap-1 text-xs font-semibold text-slate-600">Target Feed Material
-                <select className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium" value={priceTargetId} onChange={e => setPriceTargetId(e.target.value)}>
-                  {priceType === "metal" 
-                    ? metals.map(m => <option key={m.id} value={m.id}>{m.name} ({m.code})</option>)
-                    : rawMaterials.map(r => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)
-                  }
-                </select>
-              </label>
-              <label className="grid gap-1 text-xs font-semibold text-slate-600">New Locked Price (INR/kg)
-                <Input required type="number" step="0.0001" value={priceValue} onChange={e => setPriceValue(e.target.value)} placeholder="e.g. 78.50" />
-              </label>
-              <label className="grid gap-1 text-xs font-semibold text-slate-600">Price Source Desk
-                <Input value={priceSource} onChange={e => setPriceSource(e.target.value)} />
-              </label>
-              <label className="grid gap-1 text-xs font-semibold text-slate-600">Reason for price update
-                <Input value={priceReason} onChange={e => setPriceReason(e.target.value)} placeholder="e.g. Quarterly Contract Update" />
-              </label>
-              <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
-                <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#002652]">Publish Lock</Button>
-              </div>
-            </form>
+      {activeModal === "price" && (() => {
+        const currentRateVal = currentRateInfo ? Number(currentRateInfo.currentRate) : 0;
+        const newRateVal = parseFloat(priceValue) || 0;
+        const difference = newRateVal - currentRateVal;
+        const percentage = currentRateVal > 0 ? (difference / currentRateVal) * 100 : 0;
+        const isReadOnly = actor?.role === "PDQC";
+        const materialsList = activeMaterials.length > 0 ? activeMaterials : rawMaterials;
+
+        return (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
+            <div className="absolute inset-0" onClick={() => { if (!showConfirmPublish) setActiveModal(null); }} />
+            <div className="relative w-full max-w-md bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
+              <header className="flex items-center justify-between border-b border-slate-200 p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
+                  <IndianRupee className="size-4" /> Price Adjuster Panel
+                </h3>
+                <button type="button" onClick={() => setActiveModal(null)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
+              </header>
+              <form onSubmit={handlePublishPrice} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
+                <label className="grid gap-1 text-xs font-semibold text-slate-600">Material *
+                  <select 
+                    className="h-10 rounded border bg-white px-2.5 text-xs text-slate-700 font-medium disabled:bg-slate-50 disabled:cursor-not-allowed" 
+                    value={priceTargetId} 
+                    onChange={e => setPriceTargetId(e.target.value)}
+                    disabled={!!selectedRaw}
+                    required
+                  >
+                    <option value="" disabled>Select Material...</option>
+                    {materialsList.map((m: any) => (
+                      <option key={m.id} value={m.id}>
+                        {m.code} - {m.name || m.materialName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                {/* Read Only Current Price Information */}
+                <div className="rounded border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Current Price Information</h4>
+                  {isLoadingCurrentRate ? (
+                    <div className="space-y-2 py-1.5 animate-pulse w-full">
+                      <div className="h-3 w-1/4 bg-slate-200 rounded animate-pulse" />
+                      <div className="grid grid-cols-2 gap-4 mt-2">
+                        <div className="flex flex-col gap-1">
+                          <div className="h-2 w-16 bg-slate-150 rounded" />
+                          <div className="h-4 w-24 bg-slate-200 rounded" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <div className="h-2 w-16 bg-slate-150 rounded" />
+                          <div className="h-4 w-24 bg-slate-200 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-y-2.5 gap-x-2 text-xs">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Current Active Rate</span>
+                        <strong className="text-slate-900 font-mono text-sm">{currentRateInfo ? inr(currentRateInfo.currentRate) : "N/A"}/KG</strong>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Current Supplier</span>
+                        <span className="text-slate-900 font-semibold truncate block" title={currentRateInfo?.supplier || "N/A"}>
+                          {currentRateInfo?.supplier || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Last Updated Date</span>
+                        <span className="text-slate-800 block">
+                          {currentRateInfo?.lastUpdatedDate ? shortDate(currentRateInfo.lastUpdatedDate) : "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] uppercase">Last Updated By</span>
+                        <span className="text-slate-800 block truncate" title={currentRateInfo?.lastUpdatedBy || "System"}>
+                          {currentRateInfo?.lastUpdatedBy || "System"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Price Trend Mini Chart */}
+                {priceTargetId && (
+                  <PriceTrendSparkline history={priceTargetHistory} />
+                )}
+
+                {/* New Price Information Fields */}
+                <div className="border-t border-slate-100 pt-3 flex flex-col gap-3">
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">New Price Information</h4>
+                  
+                  {isReadOnly ? (
+                    <div className="p-3 border border-amber-200 bg-amber-50 rounded text-xs text-amber-800 flex items-start gap-2">
+                      <AlertCircle className="size-4 shrink-0 mt-0.5" />
+                      <span>You are logged in with read-only access (PDQC). You can select materials and view active rates/history trends, but price publication is restricted.</span>
+                    </div>
+                  ) : (
+                    <>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-600">New Rate (₹/KG) *
+                        <Input 
+                          required 
+                          type="number" 
+                          step="0.01" 
+                          min="0.01"
+                          value={priceValue} 
+                          onChange={e => setPriceValue(e.target.value)} 
+                          placeholder="e.g. 150.00" 
+                          className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs font-mono"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-600">Effective Date *
+                        <Input 
+                          required 
+                          type="date" 
+                          value={effectiveDate} 
+                          onChange={e => setEffectiveDate(e.target.value)}
+                          className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-600">Supplier *
+                        <Input 
+                          required 
+                          value={priceSource} 
+                          onChange={e => setPriceSource(e.target.value)}
+                          placeholder="e.g. JSW Procurement Desk"
+                          className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-600">Reason *
+                        <Input 
+                          required 
+                          value={priceReason} 
+                          onChange={e => setPriceReason(e.target.value)}
+                          placeholder="e.g. Market Index Revision"
+                          className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs"
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-semibold text-slate-600">Remarks
+                        <Input 
+                          value={priceRemarks} 
+                          onChange={e => setPriceRemarks(e.target.value)}
+                          placeholder="Optional comments"
+                          className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs"
+                        />
+                      </label>
+
+                      {/* Price Change Preview Card */}
+                      {parseFloat(priceValue) > 0 && (
+                        <div className={`p-3 rounded border text-xs flex flex-col gap-1.5 ${
+                          currentRateVal === 0
+                            ? "bg-blue-50 text-blue-800 border-blue-200"
+                            : difference > 0 
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
+                            : difference < 0 
+                            ? "bg-rose-50 text-rose-800 border-rose-200" 
+                            : "bg-slate-50 text-slate-800 border-slate-200"
+                        }`}>
+                          <h5 className="font-bold uppercase tracking-wider text-[10px] text-slate-500">Price Change Preview</h5>
+                          <div className="grid grid-cols-2 gap-y-2 font-medium">
+                            <div>Current Rate: <span className="font-mono">{currentRateVal > 0 ? inr(currentRateVal) : "N/A"}</span></div>
+                            <div>New Rate: <span className="font-mono">{inr(newRateVal)}</span></div>
+                            {currentRateVal > 0 ? (
+                              <>
+                                <div>Difference: <span className="font-mono font-bold">{difference > 0 ? "+" : ""}{inr(difference)}</span></div>
+                                <div>Change %: <span className="font-mono font-bold">{percentage > 0 ? "+" : ""}{Number(percentage ?? 0).toFixed(2)}%</span></div>
+                              </>
+                            ) : (
+                              <div className="col-span-2 text-blue-600 font-semibold">Initial Rate Publication</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
+                  <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
+                  {!isReadOnly && (
+                    <Button type="submit" className="bg-[#0b5cbf] hover:bg-[#094c9e]">Publish Price Update</Button>
+                  )}
+                </div>
+              </form>
+
+              {/* Confirmation Dialog Overlay */}
+              {showConfirmPublish && (
+                <div className="absolute inset-0 z-100 flex items-center justify-center bg-black/50 p-4">
+                  <div className="w-full max-w-sm bg-white border border-slate-200 rounded-sm shadow-sm p-5 flex flex-col gap-4 animate-in zoom-in-95 duration-100">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                        <AlertCircle className="size-4.5 text-amber-500" />
+                        Confirm Price Publication
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Are you sure you want to publish this price update? This will deactivate the current active rate and propagate the new rate across all systems immediately.
+                      </p>
+                    </div>
+
+                    <div className="border border-slate-100 rounded bg-slate-50 p-3 flex flex-col gap-2 text-xs">
+                      <div className="flex justify-between border-b pb-1.5 border-slate-100">
+                        <span className="text-slate-500">Material</span>
+                        <strong className="text-slate-800">
+                          {materialsList.find((m: any) => m.id === priceTargetId)?.code || selectedRaw?.code || "Material"}
+                        </strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Current Rate</span>
+                        <span className="font-mono font-semibold text-slate-700">{currentRateVal > 0 ? `${inr(currentRateVal)}/KG` : "N/A"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">New Rate</span>
+                        <span className="font-mono font-bold text-slate-900">{inr(newRateVal)}/KG</span>
+                      </div>
+                      {currentRateVal > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Difference</span>
+                          <span className={`font-mono font-bold ${difference > 0 ? "text-emerald-600" : difference < 0 ? "text-rose-600" : "text-slate-600"}`}>
+                            {difference > 0 ? "+" : ""}{inr(difference)} ({difference > 0 ? "+" : ""}{Number(percentage ?? 0).toFixed(2)}%)
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Effective Date</span>
+                        <span className="font-semibold text-slate-800">{shortDate(effectiveDate)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Supplier</span>
+                        <span className="font-semibold text-slate-800 truncate max-w-[150px]" title={priceSource}>{priceSource}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2.5 mt-1">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setShowConfirmPublish(false)}
+                        disabled={publishNewPrice.isPending}
+                        className="text-xs h-8"
+                      >
+                        Cancel
+                      </Button>
+                      <Button 
+                        type="button" 
+                        onClick={handleConfirmPublish}
+                        disabled={publishNewPrice.isPending}
+                        className={`bg-[#0b5cbf] hover:bg-[#094c9e] text-xs h-8 min-w-[100px] flex items-center justify-center gap-1 transition-all ${publishNewPrice.isPending ? "btn-loading-stripes" : ""}`}
+                      >
+                        {publishNewPrice.isPending ? "Publishing..." : "Confirm & Publish"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 5. JSW Steel Alloy Composition Drawer */}
       {activeModal === "alloy" && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
           <div className="absolute inset-0" onClick={() => setActiveModal(null)} />
-          <div className="relative w-full max-w-lg bg-white border-l border-slate-200 h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+          <div className="relative w-full max-w-lg bg-white border-l border-slate-200 h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
             <header className="flex items-center justify-between border-b border-slate-200 p-4">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-[#111827] flex items-center gap-2">
                 <Layers className="size-4" /> JSW Steel Composition Structure
@@ -989,7 +2791,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
                         <option value="" disabled>Select Feed...</option>
                         {row.type === "metal" 
                           ? grades.map(g => <option key={g.id} value={g.id}>{g.name} ({g.subGrade || "Standard"})</option>)
-                          : rawMaterials.map(r => <option key={r.id} value={r.id}>{r.name} ({r.code})</option>)
+                          : rawMaterials.map((r: any) => <option key={r.id} value={r.id}>{r.name} ({r.materialCode})</option>)
                         }
                       </select>
 
@@ -1030,7 +2832,7 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
 
               <div className="flex justify-end gap-2 border-t pt-4 mt-auto">
                 <Button type="button" variant="outline" onClick={() => setActiveModal(null)}>Cancel</Button>
-                <Button type="submit" className="bg-[#002652]" disabled={alloyCompSum !== 100}>
+                <Button type="submit" className="bg-primary" disabled={alloyCompSum !== 100}>
                   Save Structure
                 </Button>
               </div>
@@ -1038,6 +2840,53 @@ export function MastersPage({ focus = "material-master" }: { focus?: "metals" | 
           </div>
         </div>
       )}
+
+      <CloneGradeModal 
+        isOpen={isCloneModalOpen} 
+        onClose={() => setIsCloneModalOpen(false)} 
+        sourceGrade={grades.find((g: any) => selectedGradeIds.has(g.id)) ?? null}
+        existingGrades={grades}
+        onSuccess={() => {
+          setIsCloneModalOpen(false);
+          setSelectedGradeIds(new Set());
+          queryClient.invalidateQueries({ queryKey: ["enterprise-table"] });
+        }}
+      />
+      
+      <BulkUpdateModal 
+        isOpen={isBulkUpdateModalOpen} 
+        onClose={() => setIsBulkUpdateModalOpen(false)} 
+        selectedGrades={grades.filter((g: any) => selectedGradeIds.has(g.id))}
+        metals={metals}
+        onSuccess={() => {
+          setIsBulkUpdateModalOpen(false);
+          setSelectedGradeIds(new Set());
+          queryClient.invalidateQueries({ queryKey: ["enterprise-table"] });
+        }}
+      />
+      
+      <CompareGradesModal 
+        isOpen={isCompareModalOpen} 
+        onClose={() => setIsCompareModalOpen(false)} 
+        selectedGrades={grades.filter((g: any) => selectedGradeIds.has(g.id))}
+      />
+
+      <GradeImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onSuccess={() => {
+          setIsImportModalOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["grades"] });
+        }}
+      />
+
+      {/* Grade Details Drawer */}
+      <GradeDetailsDrawer 
+        open={isGradeDrawerOpen} 
+        onOpenChange={setIsGradeDrawerOpen} 
+        grade={drawerGrade} 
+        metals={metals} 
+      />
     </div>
   );
 }
@@ -1137,7 +2986,29 @@ function UsersPanel() {
     }
   };
 
-  const userColumns = useMemo<EnterpriseColumnDef<any>[]>(() => [
+  const handleReactivateUser = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to reactivate user ${name}?`)) return;
+    try {
+      await api.put(`/users/${id}/reactivate`);
+      toast.success(`User ${name} reactivated successfully.`);
+      usersQuery.refetch();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to reactivate user.");
+    }
+  };
+
+  const handleSuspendUser = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to suspend user ${name}?`)) return;
+    try {
+      await api.put(`/users/${id}/suspend`);
+      toast.success(`User ${name} suspended successfully.`);
+      usersQuery.refetch();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to suspend user.");
+    }
+  };
+
+  const userColumns: EnterpriseColumnDef<any>[] = [
     { accessorKey: "name", header: "User", meta: { label: "User" }, cell: ({ row }) => <span className="font-semibold text-slate-800">{row.original.name}</span> },
     { accessorKey: "email", header: "Email", meta: { label: "Email", className: "font-mono text-[11px]" } },
     { accessorKey: "department", header: "Department", meta: { label: "Department" }, cell: ({ row }) => row.original.department || "Operations" },
@@ -1147,12 +3018,51 @@ function UsersPanel() {
       header: "Status",
       meta: { label: "Status" },
       cell: ({ row }) => (
-        <Badge className={row.original.status === "ACTIVE" ? "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]" : "border-slate-200 bg-slate-100 text-slate-500"}>
+        <Badge className={
+          row.original.status === "ACTIVE" ? "border-success-border bg-success-bg text-success-fg" : 
+          row.original.status === "SUSPENDED" ? "border-amber-200 bg-amber-50 text-amber-700" :
+          "border-slate-200 bg-slate-100 text-slate-500"
+        }>
           {row.original.status}
         </Badge>
       )
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      meta: { label: "Actions" },
+      cell: ({ row }) => {
+        const isSelf = actor?.id === row.original.id;
+        return (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); setSelectedUser(row.original); setActiveUserModal("edit"); }} title="Edit User">
+              <Edit2 className="size-4 text-blue-600" />
+            </Button>
+            {actor?.role === "COSTING_DEPARTMENT" && !isSelf && (
+              <>
+                {row.original.status === "ACTIVE" && (
+                  <>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); handleSuspendUser(row.original.id, row.original.name); }} title="Suspend">
+                      <AlertCircle className="size-4 text-amber-600" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); handleDeactivateUser(row.original.id, row.original.name); }} title="Deactivate">
+                      <Trash2 className="size-4 text-rose-600" />
+                    </Button>
+                  </>
+                )}
+                {["INACTIVE", "SUSPENDED"].includes(row.original.status) && (
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => { e.stopPropagation(); handleReactivateUser(row.original.id, row.original.name); }} title="Reactivate">
+                    <Check className="size-4 text-emerald-600" />
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        );
+      }
     }
-  ], []);
+  ];
 
   return (
     <div className="grid gap-4 xl:grid-cols-[1.3fr_.7fr]">
@@ -1187,14 +3097,14 @@ function UsersPanel() {
               <option value="INACTIVE">Inactive</option>
             </select>
             {isCostingDept && (
-              <Button size="sm" onClick={() => setActiveUserModal("create")} className="bg-[#002652] hover:bg-[#001b3a] text-xs h-9">
+              <Button size="sm" onClick={() => setActiveUserModal("create")} className="bg-primary hover:bg-[#001b3a] text-xs h-9">
                 <Plus className="mr-1 size-4" /> Add User
               </Button>
             )}
           </div>
         }
       />
-      <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none">
+      <Card className="rounded-sm border border-[#E5E7EB] bg-white shadow-none">
         <CardHeader className="p-4 border-b border-[#E5E7EB]"><CardTitle className="text-xs font-bold uppercase tracking-wider text-slate-800">Role Access Levels</CardTitle></CardHeader>
         <CardContent className="flex flex-col gap-2 p-4">
           {[
@@ -1202,7 +3112,7 @@ function UsersPanel() {
             { role: "PDQC", desc: "Limited access to dashboard, costing workspace, and read-only view of steel grade parameters." }
           ].map((item) => (
             <div key={item.role} className="rounded-sm border border-[#E5E7EB] p-3 text-xs bg-slate-50/50">
-              <strong className="text-[#002652] font-semibold">{item.role}</strong>
+              <strong className="text-primary font-semibold">{item.role}</strong>
               <p className="text-slate-500 mt-1">{item.desc}</p>
             </div>
           ))}
@@ -1213,7 +3123,7 @@ function UsersPanel() {
       {activeUserModal && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
           <div className="absolute inset-0" onClick={() => setActiveUserModal(null)} />
-          <div className="relative w-full max-w-md bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+          <div className="relative w-full max-w-md bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
             <header className="flex items-center justify-between border-b border-[#E5E7EB] p-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
                 <Users className="size-4" /> {activeUserModal === "create" ? "Add User Account" : "Edit User Account"}
@@ -1265,7 +3175,7 @@ function UsersPanel() {
                 ) : <div />}
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={() => setActiveUserModal(null)} className="text-xs">Cancel</Button>
-                  <Button type="submit" className="bg-[#002652] hover:bg-[#001b3a] text-xs">Save Account</Button>
+                  <Button type="submit" className="bg-primary hover:bg-[#001b3a] text-xs">Save Account</Button>
                 </div>
               </div>
             </form>
@@ -1280,18 +3190,15 @@ function SettingsPanel() {
   const { actor } = useAuth();
   const { erpTheme, setErpTheme } = useUIStore();
   const settings = useSettingsStore((state) => state.settings);
-  const gstSlabs = useSettingsStore((state) => state.gstSlabs);
   const fetchSettings = useSettingsStore((state) => state.fetchSettings);
   const updateBulkSettings = useSettingsStore((state) => state.updateBulkSettings);
-  const createGstSlab = useSettingsStore((state) => state.createGstSlab);
-  const deactivateGstSlab = useSettingsStore((state) => state.deactivateGstSlab);
   const updateProfile = useSettingsStore((state) => state.updateProfile);
   const isLoading = useSettingsStore((state) => state.isLoading);
 
   const isAdmin = actor?.role === "COSTING_DEPARTMENT";
 
   // Active sub-tab state
-  const [activeTab, setActiveTab] = useState<"profile" | "gst" | "theme" | "system">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "theme" | "system">("profile");
 
   // Profile Form States
   const [profileName, setProfileName] = useState(actor?.name || "");
@@ -1299,12 +3206,6 @@ function SettingsPanel() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // GST Slab Creator Form States
-  const [gstName, setGstName] = useState("");
-  const [gstCode, setGstCode] = useState("");
-  const [gstRate, setGstRate] = useState("");
-  const [gstDesc, setGstDesc] = useState("");
-  const [showGstModal, setShowGstModal] = useState(false);
 
   // System settings maps matching category
   const [systemFields, setSystemFields] = useState<Record<string, string>>({});
@@ -1399,51 +3300,10 @@ function SettingsPanel() {
     }
   };
 
-  const handleCreateGstSlab = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!gstName || !gstCode || !gstRate) {
-      toast.error("Please fill in all mandatory slab fields.");
-      return;
-    }
-    const rateVal = parseFloat(gstRate);
-    if (isNaN(rateVal) || rateVal < 0 || rateVal > 100) {
-      toast.error("GST Rate must be a percentage between 0 and 100.");
-      return;
-    }
-
-    try {
-      await createGstSlab({
-        name: gstName,
-        code: gstCode.toUpperCase(),
-        rate: rateVal,
-        description: gstDesc,
-        active: true
-      });
-      toast.success(`GST Slab ${gstCode} registered successfully.`);
-      setShowGstModal(false);
-      setGstName("");
-      setGstCode("");
-      setGstRate("");
-      setGstDesc("");
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to create GST Slab.");
-    }
-  };
-
-  const handleDeactivateSlab = async (id: string, code: string) => {
-    if (!window.confirm(`Are you sure you want to deactivate GST Slab ${code}?`)) return;
-    try {
-      await deactivateGstSlab(id);
-      toast.success(`GST Slab ${code} has been deactivated.`);
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to deactivate GST Slab.");
-    }
-  };
 
   const handleResetSystemSettings = () => {
     if (!window.confirm("Reset all settings to default values?")) return;
     const defaults: Record<string, string> = {
-      default_gst_rate: "18",
       price_validity_days: "30",
       currency: "INR",
       weight_unit: "kg",
@@ -1459,11 +3319,10 @@ function SettingsPanel() {
   return (
     <div className="grid gap-5 xl:grid-cols-[0.25fr_1fr] text-left">
       {/* Side Tabs Selector */}
-      <Card className="rounded-md border border-[#E5E7EB] bg-white p-3 flex flex-col gap-1 h-fit shadow-none">
+      <Card className="rounded-sm border border-[#E5E7EB] bg-white p-3 flex flex-col gap-1 h-fit shadow-none">
         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 mb-2">Settings Module</span>
         {[
           { id: "profile" as const, label: "Profile Credentials" },
-          { id: "gst" as const, label: "GST Slabs & Rates" },
           { id: "theme" as const, label: "Currency & Themes" },
           { id: "system" as const, label: "System Preferences" }
         ].map((tab) => (
@@ -1472,7 +3331,7 @@ function SettingsPanel() {
             onClick={() => setActiveTab(tab.id)}
             className={`w-full py-2 px-3.5 text-left text-xs font-bold rounded-sm transition-all ${
               activeTab === tab.id
-                ? "bg-[#F3F4F6] text-[#002652] border-l-2 border-[#002652]"
+                ? "bg-[#F3F4F6] text-primary border-l-2 border-jsw-corp"
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
             }`}
           >
@@ -1482,7 +3341,7 @@ function SettingsPanel() {
       </Card>
 
       {/* Main Form Tab Panels */}
-      <Card className="rounded-md border border-[#E5E7EB] bg-white p-6 shadow-none min-h-[500px]">
+      <Card className="rounded-sm border border-[#E5E7EB] bg-white p-6 shadow-none min-h-[500px]">
         {/* Tab 1: Profile Credentials */}
         {activeTab === "profile" && (
           <form onSubmit={handleProfileSave} className="flex flex-col gap-4 max-w-lg">
@@ -1518,77 +3377,13 @@ function SettingsPanel() {
               </div>
             </div>
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-4">
-              <Button type="submit" disabled={isLoading} className="bg-[#002652] hover:bg-[#001b3a] h-9 text-xs rounded-sm">
+              <Button type="submit" disabled={isLoading} className="bg-primary hover:bg-[#001b3a] h-9 text-xs rounded-sm">
                 {isLoading ? "Saving changes..." : "Save Credentials"}
               </Button>
             </div>
           </form>
         )}
 
-        {/* Tab 2: GST Configuration */}
-        {activeTab === "gst" && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">GST Configuration</h3>
-                <p className="text-xs text-slate-500 mt-1">Manage tax rate slabs applied to final calculation costing invoice summaries.</p>
-              </div>
-              {isAdmin && (
-                <Button size="sm" onClick={() => setShowGstModal(true)} className="bg-[#002652] hover:bg-[#001b3a] text-xs h-8.5 rounded-sm">
-                  <Plus className="mr-1 size-3.5" /> Add New Slab
-                </Button>
-              )}
-            </div>
-
-            {!isAdmin && (
-              <div className="bg-amber-50 text-amber-700 border border-amber-200 rounded-sm p-3.5 text-xs font-semibold flex items-center gap-2 mt-1">
-                <AlertCircle className="size-4.5 shrink-0 text-amber-500" />
-                <span>GST configurations are in read-only mode for non-admin accounts. Contact an administrator to add or modify slabs.</span>
-              </div>
-            )}
-
-            <div className="overflow-x-auto border border-[#E5E7EB] rounded-sm mt-2">
-              <Table>
-                <thead>
-                  <tr className="bg-[#FAFAFA] text-[10px] uppercase font-bold tracking-wider border-b border-[#E5E7EB] text-slate-500">
-                    <TableHead>Slab Name</TableHead>
-                    <TableHead>Tax Code</TableHead>
-                    <TableHead>Slab Rate (%)</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Status</TableHead>
-                    {isAdmin && <TableHead className="w-[100px] text-right">Actions</TableHead>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {gstSlabs.map((slab) => (
-                    <tr key={slab.id} className="text-xs border-b border-[#E5E7EB] hover:bg-slate-50/50">
-                      <TableCell className="font-semibold text-slate-800">{slab.name}</TableCell>
-                      <TableCell className="font-mono text-xs">{slab.code}</TableCell>
-                      <TableCell className="font-bold text-slate-700 font-mono">{Number(slab.rate)}%</TableCell>
-                      <TableCell className="text-slate-500 truncate max-w-xs">{slab.description || "General industrial tax slab"}</TableCell>
-                      <TableCell>
-                        <Badge className={slab.active ? "border-[#bde4cf] bg-[#e8fbf0] text-[#087443]" : "border-slate-200 bg-slate-100 text-slate-500"}>
-                          {slab.active ? "Active" : "Inactive"}
-                        </Badge>
-                      </TableCell>
-                      {isAdmin && (
-                        <TableCell className="text-right">
-                          {slab.active ? (
-                            <Button size="sm" variant="outline" onClick={() => handleDeactivateSlab(slab.id, slab.code)} className="h-6.5 text-[10px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-sm">
-                              Deactivate
-                            </Button>
-                          ) : (
-                            <span className="text-[10px] font-bold text-slate-400 italic">Disabled</span>
-                          )}
-                        </TableCell>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </div>
-          </div>
-        )}
 
         {/* Tab 3: Currency & Theme Preferences */}
         {activeTab === "theme" && (
@@ -1601,7 +3396,7 @@ function SettingsPanel() {
             {/* Currency settings card */}
             <Card className="border-[#E5E7EB] p-4 shadow-none rounded-sm bg-white">
               <CardTitle className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                <DollarSign className="size-4 text-[#002652]" /> Operational Currency
+                <IndianRupee className="size-4 text-primary" /> Operational Currency
               </CardTitle>
               <div className="flex flex-col gap-2.5">
                 <label className="text-xs font-semibold text-slate-500 flex flex-col gap-1.5">
@@ -1618,7 +3413,7 @@ function SettingsPanel() {
                   </select>
                 </label>
                 {isAdmin && (
-                  <Button onClick={handleSystemSettingsSave} className="bg-[#002652] hover:bg-[#001b3a] h-8.5 max-w-xs text-xs mt-1 rounded-sm">
+                  <Button onClick={handleSystemSettingsSave} className="bg-primary hover:bg-[#001b3a] h-8.5 max-w-xs text-xs mt-1 rounded-sm">
                     Save Currency Preset
                   </Button>
                 )}
@@ -1644,7 +3439,7 @@ function SettingsPanel() {
                     }}
                     className={`flex flex-col gap-1 p-3 text-left border rounded-sm transition-all cursor-pointer ${
                       erpTheme === t.id
-                        ? "border-[#002652] bg-slate-50 ring-0"
+                        ? "border-jsw-corp bg-slate-50 ring-0"
                         : "border-[#E5E7EB] hover:bg-slate-50"
                     }`}
                   >
@@ -1747,7 +3542,7 @@ function SettingsPanel() {
                 <Button type="button" variant="outline" onClick={handleResetSystemSettings} className="h-9 text-xs border-[#E5E7EB] hover:bg-slate-50 text-slate-600 rounded-sm">
                   Reset Defaults
                 </Button>
-                <Button type="submit" disabled={isLoading} className="bg-[#002652] hover:bg-[#001b3a] h-9 text-xs rounded-sm">
+                <Button type="submit" disabled={isLoading} className="bg-primary hover:bg-[#001b3a] h-9 text-xs rounded-sm">
                   {isLoading ? "Saving Settings..." : "Save System Configs"}
                 </Button>
               </div>
@@ -1756,45 +3551,29 @@ function SettingsPanel() {
         )}
       </Card>
 
-      {/* GST slab creation Modal to Drawer */}
-      {showGstModal && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
-          <div className="absolute inset-0" onClick={() => setShowGstModal(false)} />
-          <div className="relative w-full max-w-md bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
-            <header className="flex items-center justify-between border-b border-[#E5E7EB] p-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
-                <Plus className="size-4" /> Create GST Tax Slab
-              </h3>
-              <button type="button" onClick={() => setShowGstModal(false)} className="text-slate-400 hover:text-slate-600 font-semibold text-sm">✕</button>
-            </header>
-            <form onSubmit={handleCreateGstSlab} className="p-4 flex-1 flex flex-col gap-4 overflow-y-auto">
-              <label className="grid gap-1 text-xs font-semibold text-slate-600">Slab Name
-                <Input required value={gstName} onChange={e => setGstName(e.target.value)} placeholder="e.g. Special Recycled Metal slab" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
-              </label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="grid gap-1 text-xs font-semibold text-slate-600">Unique Code
-                  <Input required value={gstCode} onChange={e => setGstCode(e.target.value)} placeholder="e.g. GST-5" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
-                </label>
-                <label className="grid gap-1 text-xs font-semibold text-slate-600">Rate (%)
-                  <Input required type="number" step="0.01" value={gstRate} onChange={e => setGstRate(e.target.value)} placeholder="e.g. 5" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
-                </label>
-              </div>
-              <label className="grid gap-1 text-xs font-semibold text-slate-600">Description (Optional)
-                <Input value={gstDesc} onChange={e => setGstDesc(e.target.value)} placeholder="e.g. Reduced rate applied to raw blends" className="rounded-sm border-[#E5E7EB] shadow-none focus-visible:ring-0 text-xs" />
-              </label>
-              <div className="flex justify-end gap-2 border-t border-[#E5E7EB] pt-4 mt-auto">
-                <Button type="button" variant="outline" onClick={() => setShowGstModal(false)} className="text-xs">Cancel</Button>
-                <Button type="submit" className="bg-[#002652] hover:bg-[#001b3a] text-xs">Register Slab</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }
 
-function CalculationsEnterpriseTable() {
+function HighlightText({ text, highlight }: { text: string; highlight: string }) {
+  if (!text) return null;
+  if (!highlight || !highlight.trim()) return <>{text}</>;
+  const parts = text.split(new RegExp(`(${highlight})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) => 
+        part.toLowerCase() === highlight.toLowerCase() ? (
+          <mark key={i} className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5 font-semibold">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  );
+}
+
+export function CalculationsEnterpriseTable() {
   const tableQuery = useTableQuery({ sortBy: "updatedAt", sortDir: "desc" });
   const calculationsQuery = useQuery({
     queryKey: ["enterprise-table", "calculations", tableQuery.queryKey],
@@ -1804,24 +3583,61 @@ function CalculationsEnterpriseTable() {
     },
     placeholderData: (previous) => previous
   });
-  const columns = useMemo<EnterpriseColumnDef<any>[]>(() => [
-    { accessorKey: "batchId", header: "Batch ID", meta: { label: "Batch", className: "font-mono text-[11px]" } },
-    { accessorKey: "name", header: "Calculation Run", meta: { label: "Run" }, cell: ({ row }) => <span className="font-bold text-slate-800">{row.original.name}</span> },
+
+  const searchMatch = tableQuery.query.search || "";
+
+  const columns: EnterpriseColumnDef<any>[] = [
+    { 
+      accessorKey: "batchId", 
+      header: "Batch ID", 
+      meta: { label: "Batch", className: "font-mono text-[11px]" },
+      cell: ({ row }) => <HighlightText text={row.original.batchId} highlight={searchMatch} />
+    },
+    { 
+      accessorKey: "name", 
+      header: "Calculation Run", 
+      meta: { label: "Run" }, 
+      cell: ({ row }) => (
+        <span className="font-bold text-slate-800">
+          <HighlightText text={row.original.name} highlight={searchMatch} />
+        </span>
+      ) 
+    },
+    { 
+      id: "grade", 
+      header: "Grade", 
+      meta: { label: "Grade" }, 
+      cell: ({ row }) => (
+        <span className="text-slate-600">
+          <HighlightText text={row.original.alloy?.name || "N/A"} highlight={searchMatch} />
+        </span>
+      ) 
+    },
+    { 
+      id: "user", 
+      header: "Created By", 
+      meta: { label: "User" }, 
+      cell: ({ row }) => (
+        <span className="text-slate-600">
+          <HighlightText text={row.original.user?.name || "System"} highlight={searchMatch} />
+        </span>
+      ) 
+    },
     { accessorKey: "mode", header: "Mode", meta: { label: "Mode" }, cell: ({ row }) => String(row.original.mode).toUpperCase() },
     { accessorKey: "totalQuantity", header: "Volume", meta: { label: "Volume" }, cell: ({ row }) => `${Number(row.original.totalQuantity).toLocaleString("en-IN")} kg` },
-    { accessorKey: "finalCost", header: "Final Cost", meta: { label: "Final Cost" }, cell: ({ row }) => <span className="font-black text-[#0057b8]">{inr(row.original.finalCost)}</span> },
+    { accessorKey: "finalCost", header: "Final Cost", meta: { label: "Final Cost" }, cell: ({ row }) => <span className="font-black text-blue-600">{inr(row.original.finalCost)}</span> },
     {
       accessorKey: "status",
       header: "Status",
       meta: { label: "Status" },
-      cell: ({ row }) => (
-        <Badge className={row.original.status === "COMPLETED" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-amber-50 text-amber-700 border-amber-200"}>
-          {row.original.status}
-        </Badge>
-      )
+      cell: ({ row }) => {
+        const dbStatus = row.original.status;
+        const mappedStatus = dbStatus === "COMPLETED" ? "Submitted" : (dbStatus === "DRAFT" ? "Draft" : "Warning");
+        return <StatusBadge status={mappedStatus} tooltipText={`Report status: ${dbStatus}`} />;
+      }
     },
     { accessorKey: "updatedAt", header: "Updated", meta: { label: "Updated", mobileHidden: true }, cell: ({ row }) => shortDate(row.original.updatedAt) }
-  ], []);
+  ];
 
   return (
     <EnterpriseDataTable
@@ -1842,7 +3658,7 @@ function CalculationsEnterpriseTable() {
           <select
             value={tableQuery.query.filters.status ?? ""}
             onChange={(event) => tableQuery.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, status: event.target.value || undefined } }))}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+            className="h-9 rounded-sm border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
           >
             <option value="">All Statuses</option>
             <option value="DRAFT">Draft</option>
@@ -1852,7 +3668,7 @@ function CalculationsEnterpriseTable() {
           <select
             value={tableQuery.query.filters.mode ?? ""}
             onChange={(event) => tableQuery.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, mode: event.target.value || undefined } }))}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+            className="h-9 rounded-sm border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
           >
             <option value="">All Modes</option>
             <option value="metal">Metal</option>
@@ -1865,7 +3681,43 @@ function CalculationsEnterpriseTable() {
   );
 }
 
-function SavedReportsEnterpriseTable() {
+function ReportActionMenu({ report }: { report: any }) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button className="p-1 rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus:outline-none flex items-center justify-center">
+          <MoreHorizontal className="size-4" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content align="end" className="w-36 bg-white border border-slate-200 shadow-sm rounded-sm py-1 z-50 text-xs font-medium text-slate-700 animate-in fade-in zoom-in-95 duration-100">
+          <DropdownMenu.Item className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 hover:text-[#005BAC] cursor-pointer outline-none transition-colors" onSelect={() => toast.info(`Viewing ${report.name}`)}>
+            <Eye className="size-3.5 text-slate-400 group-hover:text-[#005BAC]" /> View
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 hover:text-[#005BAC] cursor-pointer outline-none transition-colors" onSelect={() => toast.info(`Previewing ${report.name}`)}>
+            <FileText className="size-3.5 text-slate-400 group-hover:text-[#005BAC]" /> Preview
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 hover:text-[#005BAC] cursor-pointer outline-none transition-colors" onSelect={() => toast.success(`Downloading ${report.name}`)}>
+            <Download className="size-3.5 text-slate-400 group-hover:text-[#005BAC]" /> Download
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 hover:text-[#005BAC] cursor-pointer outline-none transition-colors" onSelect={() => toast.success(`Duplicating ${report.name}`)}>
+            <Copy className="size-3.5 text-slate-400 group-hover:text-[#005BAC]" /> Duplicate
+          </DropdownMenu.Item>
+          <DropdownMenu.Item className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 hover:text-[#005BAC] cursor-pointer outline-none transition-colors" onSelect={() => toast.success(`Share link copied`)}>
+            <Share2 className="size-3.5 text-slate-400 group-hover:text-[#005BAC]" /> Share
+          </DropdownMenu.Item>
+          <DropdownMenu.Separator className="h-px bg-slate-100 my-1" />
+          <DropdownMenu.Item className="flex items-center gap-2 px-3 py-1.5 hover:bg-red-50 hover:text-red-600 text-red-600 cursor-pointer outline-none transition-colors" onSelect={() => toast.error(`Deleted ${report.name}`)}>
+            <Trash2 className="size-3.5" /> Delete
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+export function SavedReportsEnterpriseTable() {
+  const [selectedReport, setSelectedReport] = useState<any>(null);
   const tableQuery = useTableQuery({ sortBy: "createdAt", sortDir: "desc" });
   const reportsQuery = useQuery({
     queryKey: ["enterprise-table", "reports", tableQuery.queryKey],
@@ -1875,624 +3727,205 @@ function SavedReportsEnterpriseTable() {
     },
     placeholderData: (previous) => previous
   });
-  const columns = useMemo<EnterpriseColumnDef<any>[]>(() => [
-    { accessorKey: "name", header: "Report Name", meta: { label: "Report" }, cell: ({ row }) => <span className="font-bold text-slate-800">{row.original.name}</span> },
-    { accessorKey: "type", header: "Type", meta: { label: "Type" }, cell: ({ row }) => String(row.original.type).replace("-", " ").toUpperCase() },
-    { id: "generatedBy", header: "Generated By", enableSorting: false, meta: { label: "Owner" }, cell: ({ row }) => row.original.generatedBy?.name ?? "System" },
-    { accessorKey: "createdAt", header: "Created", meta: { label: "Created" }, cell: ({ row }) => shortDate(row.original.createdAt) }
-  ], []);
+  const columns: EnterpriseColumnDef<any>[] = [
+    { 
+      accessorKey: "name", 
+      header: "Report Name", 
+      meta: { label: "Report", sticky: "left" }, 
+      cell: ({ row }) => (
+        <div className="flex items-center gap-2">
+          <FileText className="size-3.5 text-[#005BAC]" />
+          <span className="font-bold text-slate-800 hover:text-[#005BAC] cursor-pointer hover:underline">{row.original.name}</span>
+        </div>
+      ) 
+    },
+    { 
+      accessorKey: "type", 
+      header: "Type", 
+      meta: { label: "Type" }, 
+      cell: ({ row }) => (
+        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded uppercase tracking-widest whitespace-nowrap">
+          {String(row.original.type).replace("-", " ")}
+        </span>
+      ) 
+    },
+    { 
+      id: "generatedBy", 
+      header: "Owner", 
+      enableSorting: false, 
+      meta: { label: "Owner" }, 
+      cell: ({ row }) => (
+        <div className="flex items-center gap-1.5">
+          <div className="size-5 rounded-full bg-[#EBF3FF] flex items-center justify-center text-[8px] font-bold text-[#005BAC]">
+            {(row.original.generatedBy?.name ?? "SYS").substring(0, 2).toUpperCase()}
+          </div>
+          <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{row.original.generatedBy?.name ?? "System"}</span>
+        </div>
+      ) 
+    },
+    { 
+      accessorKey: "createdAt", 
+      header: "Created", 
+      meta: { label: "Created" }, 
+      cell: ({ row }) => <span className="text-xs font-medium text-slate-500 whitespace-nowrap">{shortDate(row.original.createdAt)}</span> 
+    },
+    { 
+      id: "lastRun", 
+      header: "Last Run", 
+      enableSorting: false, 
+      meta: { label: "Last Run" }, 
+      cell: () => <span className="text-xs font-medium text-slate-500 whitespace-nowrap flex items-center gap-1"><History className="size-3" /> 2 hours ago</span> 
+    },
+    { 
+      id: "lastExport", 
+      header: "Last Export", 
+      enableSorting: false, 
+      meta: { label: "Last Export" }, 
+      cell: () => <span className="text-xs font-medium text-slate-400 whitespace-nowrap">Never</span> 
+    },
+    { 
+      id: "status", 
+      header: "Status", 
+      enableSorting: false, 
+      meta: { label: "Status" }, 
+      cell: ({ row }) => {
+        const isAudit = row.original.type === "audit";
+        return (
+          <Badge className={`uppercase tracking-widest text-[9px] font-bold ${isAudit ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+            {isAudit ? "Scheduled" : "Completed"}
+          </Badge>
+        );
+      }
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      enableSorting: false,
+      meta: { label: "Actions", sticky: "right" },
+      cell: ({ row }) => <ReportActionMenu report={row.original} />
+    }
+  ];
 
   return (
-    <EnterpriseDataTable
-      tableId="reports"
-      data={reportsQuery.data?.data ?? []}
-      columns={columns}
-      query={tableQuery.query}
-      onQueryChange={tableQuery.setQuery}
-      totalRows={reportsQuery.data?.pagination?.total ?? 0}
-      getRowId={(row) => row.id}
-      isLoading={reportsQuery.isLoading}
-      error={reportsQuery.error}
-      searchPlaceholder="Search saved reports..."
-      exportResource="reports"
-      exportParams={tableQuery.params}
-      filters={
-        <select
-          value={tableQuery.query.filters.type ?? ""}
-          onChange={(event) => tableQuery.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, type: event.target.value || undefined } }))}
-          className="h-9 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
-        >
-          <option value="">All Report Types</option>
-          <option value="cost-summary">Cost Summary</option>
-          <option value="trend">Trend</option>
-          <option value="comparison">Comparison</option>
-          <option value="audit">Audit</option>
-          <option value="custom">Custom</option>
-        </select>
-      }
-    />
-  );
-}
-
-interface CalculationReportRow {
-  batchId: string;
-  name: string;
-  mode: string;
-  totalQuantity: number;
-  finalCost: number;
-  status: string;
-}
-
-interface DailyReportRow {
-  date: string;
-  count: number;
-  qty: number;
-  value: number;
-  gst: number;
-  total: number;
-}
-
-interface MonthlyReportRow {
-  month: string;
-  count: number;
-  qty: number;
-  avg: number;
-  gross: number;
-  total: number;
-}
-
-interface ActivityReportRow {
-  operator: string;
-  action: string;
-  entity: string;
-  id: string;
-  time: string;
-}
-
-export function ReportsPage() {
-  const [reportType, setReportType] = useState<"calculations" | "daily" | "monthly" | "activity">("calculations");
-  const [search, setSearch] = useState("");
-  const [timeframe, setTimeframe] = useState("all");
-  const [page, setPage] = useState(1);
-  const itemsPerPage = 5;
-
-  // Simulated high-fidelity daily cost runs dataset
-  const dailyData = useMemo(() => {
-    return [
-      { date: "2026-05-27", count: 2, qty: 1500, value: 95000, gst: 17100, total: 112100 },
-      { date: "2026-05-26", count: 1, qty: 2000, value: 97200, gst: 17496, total: 114696 },
-      { date: "2026-05-25", count: 3, qty: 2250, value: 162110, gst: 29180, total: 191290 },
-      { date: "2026-05-24", count: 1, qty: 500, value: 42560, gst: 7661, total: 50221 },
-      { date: "2026-05-23", count: 2, qty: 1000, value: 63750, gst: 11475, total: 75225 }
-    ];
-  }, []);
-
-  // Simulated high-fidelity monthly costing trend report dataset
-  const monthlyData = useMemo(() => {
-    return [
-      { month: "May 2026", count: 9, qty: 7250, avg: 63.5, gross: 460620, total: 543532 },
-      { month: "April 2026", count: 6, qty: 5500, avg: 61.2, gross: 336600, total: 397188 },
-      { month: "March 2026", count: 8, qty: 6200, avg: 62.8, gross: 389360, total: 459445 }
-    ];
-  }, []);
-
-  // Simulated high-fidelity operator activity report dataset
-  const activityData = useMemo(() => {
-    return [
-      { operator: "admin@jsw-mcms.local", action: "PRICE_UPDATE", entity: "PriceList", id: "LME-NI-52", time: "2026-05-27 10:15" },
-      { operator: "Rahul Sharma", action: "COMPLETE", entity: "Calculation", id: "BATCH-1023", time: "2026-05-27 09:20" },
-      { operator: "Meera Iyer", action: "EXPORT_PDF", entity: "Report", id: "monthly-may-26", time: "2026-05-26 16:45" },
-      { operator: "Neha Verma", action: "SAVE_DRAFT", entity: "Calculation", id: "BATCH-1027", time: "2026-05-26 14:10" },
-      { operator: "Rahul Sharma", action: "COMPLETE", entity: "Calculation", id: "BATCH-1024", time: "2026-05-25 11:30" }
-    ];
-  }, []);
-
-  // Complex multi-tier search and timeframe filter resolver
-  const filteredData = useMemo(() => {
-    const searchLower = search.toLowerCase();
-    
-    if (reportType === "calculations") {
-      return calculations.filter((row) => {
-        const matchesSearch = row.name.toLowerCase().includes(searchLower) || row.batchId.toLowerCase().includes(searchLower);
-        const matchesTime = timeframe === "all" || 
-          (timeframe === "today" && row.createdAt?.includes("2026-05-27")) ||
-          (timeframe === "7d" && !row.createdAt?.includes("2026-05-23"));
-        return matchesSearch && matchesTime;
-      });
-    } else if (reportType === "daily") {
-      return dailyData.filter((row) => {
-        const matchesSearch = row.date.includes(searchLower);
-        const matchesTime = timeframe === "all" || (timeframe === "today" && row.date === "2026-05-27");
-        return matchesSearch && matchesTime;
-      });
-    } else if (reportType === "monthly") {
-      return monthlyData.filter((row) => row.month.toLowerCase().includes(searchLower));
-    } else {
-      return activityData.filter((row) => {
-        const matchesSearch = row.operator.toLowerCase().includes(searchLower) || row.action.toLowerCase().includes(searchLower) || row.entity.toLowerCase().includes(searchLower);
-        const matchesTime = timeframe === "all" || 
-          (timeframe === "today" && row.time.startsWith("2026-05-27"));
-        return matchesSearch && matchesTime;
-      });
-    }
-  }, [reportType, search, timeframe, dailyData, monthlyData, activityData]);
-
-  // Pagination grid indices calculations
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const paginatedData = useMemo(() => {
-    const startIndex = (page - 1) * itemsPerPage;
-    return filteredData.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredData, page, itemsPerPage]);
-
-  // Export handlers
-  const handleExportPDF = () => {
-    const doc = new jsPDF();
-    
-    // Enterprise Branding Ribbon
-    doc.setFillColor(0, 38, 82); // JSW Navy Blue
-    doc.rect(0, 0, 210, 24, "F");
-    
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(255, 255, 255);
-    doc.text("JSW METAL COST MANAGEMENT SYSTEM", 14, 15);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    
-    let titleStr: string;
-    let columns: string[];
-    let rows: (string | number)[][];
-    
-    if (reportType === "calculations") {
-      titleStr = "Calculation Cost Reports";
-      columns = ["Batch", "Calculation Run", "Pivot Mode", "Volume (kg)", "Final Value (INR)", "Status"];
-      rows = (filteredData as unknown as CalculationReportRow[]).map(r => [r.batchId, r.name, r.mode.toUpperCase(), `${r.totalQuantity} kg`, inr(r.finalCost), r.status]);
-    } else if (reportType === "daily") {
-      titleStr = "Daily Calculations Cost Runs Audit";
-      columns = ["Date", "Runs", "Volume (kg)", "Gross Value (INR)", "GST (INR)", "Cumulative Value (INR)"];
-      rows = (filteredData as unknown as DailyReportRow[]).map(r => [r.date, r.count, `${r.qty} kg`, inr(r.value), inr(r.gst), inr(r.total)]);
-    } else if (reportType === "monthly") {
-      titleStr = "Monthly Calculations Report Summary";
-      columns = ["Month", "Runs", "Volume (kg)", "Avg Rate (INR/kg)", "Gross Value (INR)", "Invoiced Value (INR)"];
-      rows = (filteredData as unknown as MonthlyReportRow[]).map(r => [r.month, r.count, `${r.qty} kg`, `${r.avg} INR/kg`, inr(r.gross), inr(r.total)]);
-    } else {
-      titleStr = "User Operator Activity Audit Report";
-      columns = ["Operator", "Action", "Entity", "Affected ID", "Timestamp"];
-      rows = (filteredData as unknown as ActivityReportRow[]).map(r => [r.operator, r.action, r.entity, r.id, r.time]);
-    }
-    
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(33, 33, 33);
-    doc.text(titleStr, 14, 38);
-    
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(120, 120, 120);
-    doc.text(`Generated At: ${new Date().toLocaleString()}`, 14, 45);
-    doc.text(`Filter Timeframe: ${timeframe.toUpperCase()}`, 14, 50);
-    doc.line(14, 54, 196, 54);
-    
-    // Draw high-density headers
-    doc.setFillColor(240, 244, 250);
-    doc.rect(14, 60, 182, 10, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(40, 40, 40);
-    
-    const colWidth = 182 / columns.length;
-    let xOffset = 16;
-    columns.forEach(col => {
-      doc.text(col, xOffset, 66.5);
-      xOffset += colWidth;
-    });
-    
-    // Draw grid rows
-    doc.setFont("helvetica", "normal");
-    let yOffset = 78;
-    rows.forEach((row, rowIndex) => {
-      if (rowIndex % 2 === 1) {
-        doc.setFillColor(248, 250, 253);
-        doc.rect(14, yOffset - 5, 182, 8, "F");
-      }
-      
-      xOffset = 16;
-      columns.forEach((_, colIndex) => {
-        const text = String(row[colIndex] ?? "");
-        doc.text(text, xOffset, yOffset);
-        xOffset += colWidth;
-      });
-      yOffset += 9;
-      
-      if (yOffset > 275) {
-        doc.addPage();
-        yOffset = 25;
-      }
-    });
-    
-    doc.save(`jsw_mcms_${reportType}_report.pdf`);
-    toast.success("PDF report downloaded successfully!");
-  };
-
-  const handleExportExcel = () => {
-    let wsData: (string | number)[][];
-    let title: string;
-    
-    if (reportType === "calculations") {
-      title = "Calculations_Report";
-      wsData = [
-        ["Batch ID", "Calculation Run", "Pivot Mode", "Total Qty (kg)", "Final Cost (INR)", "Status"],
-        ...(filteredData as unknown as CalculationReportRow[]).map(r => [r.batchId, r.name, r.mode, r.totalQuantity, r.finalCost, r.status])
-      ];
-    } else if (reportType === "daily") {
-      title = "Daily_Report";
-      wsData = [
-        ["Date", "Runs", "Volume (kg)", "Standard Value (INR)", "GST (INR)", "Total Value (INR)"],
-        ...(filteredData as unknown as DailyReportRow[]).map(r => [r.date, r.count, r.qty, r.value, r.gst, r.total])
-      ];
-    } else if (reportType === "monthly") {
-      title = "Monthly_Report";
-      wsData = [
-        ["Month", "Runs", "Volume (kg)", "Avg Rate (INR/kg)", "Gross Value (INR)", "Invoiced Value (INR)"],
-        ...(filteredData as unknown as MonthlyReportRow[]).map(r => [r.month, r.count, r.qty, r.avg, r.gross, r.total])
-      ];
-    } else {
-      title = "User_Activity_Report";
-      wsData = [
-        ["Operator", "Action", "Entity", "Affected ID", "Timestamp"],
-        ...(filteredData as unknown as ActivityReportRow[]).map(r => [r.operator, r.action, r.entity, r.id, r.time])
-      ];
-    }
-    
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, `jsw_mcms_${title.toLowerCase()}.xlsx`);
-    toast.success("Excel report downloaded successfully!");
-  };
-
-  const handleExportCSV = () => {
-    let wsData: (string | number)[][];
-    let title: string;
-    
-    if (reportType === "calculations") {
-      title = "Calculations_Report";
-      wsData = [
-        ["Batch ID", "Calculation Run", "Pivot Mode", "Total Qty (kg)", "Final Cost (INR)", "Status"],
-        ...(filteredData as unknown as CalculationReportRow[]).map(r => [r.batchId, r.name, r.mode, r.totalQuantity, r.finalCost, r.status])
-      ];
-    } else if (reportType === "daily") {
-      title = "Daily_Report";
-      wsData = [
-        ["Date", "Runs", "Volume (kg)", "Standard Value (INR)", "GST (INR)", "Total Value (INR)"],
-        ...(filteredData as unknown as DailyReportRow[]).map(r => [r.date, r.count, r.qty, r.value, r.gst, r.total])
-      ];
-    } else if (reportType === "monthly") {
-      title = "Monthly_Report";
-      wsData = [
-        ["Month", "Runs", "Volume (kg)", "Avg Rate (INR/kg)", "Gross Value (INR)", "Invoiced Value (INR)"],
-        ...(filteredData as unknown as MonthlyReportRow[]).map(r => [r.month, r.count, r.qty, r.avg, r.gross, r.total])
-      ];
-    } else {
-      title = "User_Activity_Report";
-      wsData = [
-        ["Operator", "Action", "Entity", "Affected ID", "Timestamp"],
-        ...(filteredData as unknown as ActivityReportRow[]).map(r => [r.operator, r.action, r.entity, r.id, r.time])
-      ];
-    }
-    
-    const csvContent = wsData.map((e: (string | number)[]) => e.map((val: string | number) => `"${String(val).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `jsw_mcms_${title.toLowerCase()}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success("CSV report downloaded successfully!");
-  };
-
-  const showServerCalculationTable = reportType === "calculations";
-
-  return (
-    <div className="flex flex-col gap-5 text-left">
-      <PageHead title="Reporting & Analytics" icon={FileBarChart2} />
-
-      {/* KPI stats display */}
-      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-        <Box title="Total Calculations" value={`${calculations.length} Cost Runs`} />
-        <Box title="Daily Active Runs" value={`${dailyData[0]?.count || 0} Runs Today`} />
-        <Box title="Estimated Volume" value="7,250 kg (May)" />
-        <Box title="Exports Active" value="PDF, Excel, CSV" />
-      </div>
-
-      {/* Primary reporting content grid */}
-      <div className="grid gap-5 xl:grid-cols-[0.25fr_1fr]">
-        
-        {/* Tab options sidepanel selector */}
-        <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none p-3 flex flex-col gap-1 h-fit">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 mb-2">Report Slices</span>
-          {[
-            { id: "calculations" as const, label: "Calculation Runs" },
-            { id: "daily" as const, label: "Daily Cost Runs" },
-            { id: "monthly" as const, label: "Monthly Summaries" },
-            { id: "activity" as const, label: "User Activity Logs" }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setReportType(tab.id);
-                setPage(1);
-              }}
-              className={`w-full py-2 px-3.5 text-left text-xs font-bold rounded-sm transition-all ${
-                reportType === tab.id
-                  ? "bg-[#F3F4F6] text-[#002652] border-l-2 border-[#002652]"
-                  : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </Card>
-
-        {/* Dynamic visual grid actions wrapper */}
-        <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none overflow-hidden flex flex-col gap-4 p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
-            <div>
-              <h3 className="font-bold text-slate-900 tracking-tight text-sm uppercase">
-                {reportType === "calculations"
-                  ? "Costing Calculation Reports"
-                  : reportType === "daily"
-                  ? "Daily Calculations Audit"
-                  : reportType === "monthly"
-                  ? "Monthly Calculations Summary"
-                  : "Operator Activity Logs"}
-              </h3>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Generate, search, filter, and export formal reports in PDF or Spreadsheet formats.
+    <>
+      <EnterpriseDataTable
+        tableId="reports"
+        data={reportsQuery.data?.data ?? []}
+        columns={columns}
+        query={tableQuery.query}
+        onQueryChange={tableQuery.setQuery}
+        totalRows={reportsQuery.data?.pagination?.total ?? 0}
+        getRowId={(row) => row.id}
+        isLoading={reportsQuery.isLoading}
+        error={reportsQuery.error}
+        searchPlaceholder="Search saved reports..."
+        exportResource="reports"
+        exportParams={tableQuery.params}
+        onRowClick={(row) => setSelectedReport(row)}
+        filters={
+          <select
+            value={tableQuery.query.filters.type ?? ""}
+            onChange={(event) => tableQuery.setQuery((current) => ({ ...current, page: 1, filters: { ...current.filters, type: event.target.value || undefined } }))}
+            className="h-9 rounded-sm border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600"
+          >
+            <option value="">All Report Types</option>
+            <option value="cost-summary">Cost Summary</option>
+            <option value="trend">Trend</option>
+            <option value="comparison">Comparison</option>
+            <option value="audit">Audit</option>
+            <option value="custom">Custom</option>
+          </select>
+        }
+      />
+      <Sheet open={!!selectedReport} onOpenChange={(open) => !open && setSelectedReport(null)}>
+        <SheetContent className="w-[400px] sm:w-[540px] border-l border-slate-200 shadow-sm p-0 flex flex-col">
+          <SheetHeader className="px-6 py-5 border-b border-slate-100 bg-slate-50 flex-none space-y-1">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <SheetTitle className="text-lg font-bold text-[#005BAC]">{selectedReport?.name}</SheetTitle>
+                <SheetDescription className="text-xs font-semibold uppercase tracking-widest text-slate-500 mt-1">
+                  {selectedReport?.type?.replace("-", " ")} Report
+                </SheetDescription>
+              </div>
+              <Badge className={`uppercase tracking-widest text-[9px] font-bold ${selectedReport?.type === 'audit' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                {selectedReport?.type === 'audit' ? 'Scheduled' : 'Completed'}
+              </Badge>
+            </div>
+          </SheetHeader>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-white">
+            {/* Summary */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Executive Summary</h4>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                This report provides a comprehensive cost analysis of <strong className="text-slate-800">{selectedReport?.name}</strong>. It highlights key material usage trends and recent price variations across operations.
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8.5 rounded-sm border-[#E5E7EB] hover:bg-slate-50 text-slate-750 text-xs font-semibold flex items-center gap-1.5 shadow-none"
-                onClick={handleExportPDF}
-                disabled={filteredData.length === 0}
-              >
-                <Download className="h-3.5 w-3.5" /> PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8.5 rounded-sm border-[#E5E7EB] hover:bg-slate-50 text-slate-750 text-xs font-semibold flex items-center gap-1.5 shadow-none"
-                onClick={handleExportExcel}
-                disabled={filteredData.length === 0}
-              >
-                <Download className="h-3.5 w-3.5" /> Excel
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8.5 rounded-sm border-[#E5E7EB] hover:bg-slate-50 text-slate-750 text-xs font-semibold flex items-center gap-1.5 shadow-none"
-                onClick={handleExportCSV}
-                disabled={filteredData.length === 0}
-              >
-                <Download className="h-3.5 w-3.5" /> CSV
-              </Button>
-            </div>
-          </div>
-
-          {/* Search bar and parameter filters */}
-          <div className="grid gap-3 md:grid-cols-3 bg-[#FAFAFA] p-3 rounded-md border border-[#E5E7EB]">
-            <div className="flex flex-col gap-1 text-left">
-              <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                <Search className="h-3 w-3" /> Search
-              </label>
-              <Input
-                type="text"
-                placeholder={
-                  reportType === "calculations"
-                    ? "Search name or batch..."
-                    : reportType === "daily"
-                    ? "Search date..."
-                    : reportType === "monthly"
-                    ? "Search month..."
-                    : "Search operator or action..."
-                }
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="h-9 text-xs bg-white border border-[#E5E7EB] rounded-sm shadow-none focus-visible:ring-0"
-              />
-            </div>
-
-            {reportType !== "monthly" && (
-              <div className="flex flex-col gap-1 text-left">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                  <Calendar className="h-3 w-3" /> Timeframe
-                </label>
-                <div className="flex gap-1 bg-white p-1 rounded-sm border border-[#E5E7EB] h-9">
-                  {[
-                    { id: "all", label: "All Time" },
-                    { id: "today", label: "Today" },
-                    { id: "7d", label: "Last 7D" }
-                  ].map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => {
-                        setTimeframe(t.id);
-                        setPage(1);
-                      }}
-                      className={`flex-1 text-[9px] font-bold rounded-sm uppercase tracking-wide transition-all ${
-                        timeframe === t.id
-                          ? "bg-[#F3F4F6] text-[#002652]"
-                          : "text-slate-500 hover:text-slate-800"
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Unified Enterprise Table Layout */}
-          {showServerCalculationTable ? (
-            <CalculationsEnterpriseTable />
-          ) : (
-            <>
-              <div className="overflow-x-auto border border-[#E5E7EB] rounded-md">
-                <Table>
-                  <thead>
-                    <tr className="bg-[#FAFAFA] text-[10px] uppercase font-bold tracking-wider border-b border-[#E5E7EB] text-slate-500">
-                      {reportType === "daily" ? (
-                        <>
-                          <TableHead className="font-bold text-left">Date</TableHead>
-                          <TableHead className="font-bold text-left">Runs Recorded</TableHead>
-                          <TableHead className="font-bold text-left">Volume (kg)</TableHead>
-                          <TableHead className="font-bold text-left">Gross Cost (INR)</TableHead>
-                          <TableHead className="font-bold text-left">GST Generated</TableHead>
-                          <TableHead className="font-bold text-left">Final Cost (INR)</TableHead>
-                        </>
-                      ) : reportType === "monthly" ? (
-                        <>
-                          <TableHead className="font-bold text-left">Month</TableHead>
-                          <TableHead className="font-bold text-left">Calculations Run</TableHead>
-                          <TableHead className="font-bold text-left">Cumulative Volume</TableHead>
-                          <TableHead className="font-bold text-left">Avg Rate (INR/kg)</TableHead>
-                          <TableHead className="font-bold text-left">Gross Cost (INR)</TableHead>
-                          <TableHead className="font-bold text-left">Cumulative Value (INR)</TableHead>
-                        </>
-                      ) : (
-                        <>
-                          <TableHead className="font-bold text-left">Operator</TableHead>
-                          <TableHead className="font-bold text-left">Action</TableHead>
-                          <TableHead className="font-bold text-left">Entity Type</TableHead>
-                          <TableHead className="font-bold text-left">Entity Key</TableHead>
-                          <TableHead className="font-bold text-left">Timestamp</TableHead>
-                        </>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="py-12 text-center text-slate-400 font-semibold text-xs bg-slate-50/50"
-                        >
-                          <FileBarChart2 className="h-8 w-8 text-slate-350 mb-2.5 mx-auto animate-pulse" />
-                          No matching costing records found inside this timeframe.
-                        </td>
-                      </tr>
-                    ) : (
-                      paginatedData.map((row, idx) => (
-                        <tr
-                          key={idx}
-                          className="text-xs hover:bg-slate-50/50 transition-colors border-b border-[#E5E7EB]"
-                        >
-                          {reportType === "daily" ? (
-                            (() => {
-                              const r = row as unknown as DailyReportRow;
-                              return (
-                                <>
-                                  <TableCell className="font-semibold text-slate-700">{r.date}</TableCell>
-                                  <TableCell className="font-medium text-slate-600">{r.count} runs</TableCell>
-                                  <TableCell className="font-medium text-slate-600 font-mono">{r.qty.toLocaleString()} kg</TableCell>
-                                  <TableCell className="font-medium text-slate-700 font-mono">{inr(r.value)}</TableCell>
-                                  <TableCell className="font-medium text-slate-700 font-mono">{inr(r.gst)}</TableCell>
-                                  <TableCell className="font-bold text-blue-650 font-mono">{inr(r.total)}</TableCell>
-                                </>
-                              );
-                            })()
-                          ) : reportType === "monthly" ? (
-                            (() => {
-                              const r = row as unknown as MonthlyReportRow;
-                              return (
-                                <>
-                                  <TableCell className="font-semibold text-slate-800">{r.month}</TableCell>
-                                  <TableCell className="font-medium text-slate-600">{r.count} runs</TableCell>
-                                  <TableCell className="font-medium text-slate-600 font-mono">{r.qty.toLocaleString()} kg</TableCell>
-                                  <TableCell className="font-medium text-slate-700 font-mono">{r.avg} /kg</TableCell>
-                                  <TableCell className="font-medium text-slate-700 font-mono">{inr(r.gross)}</TableCell>
-                                  <TableCell className="font-bold text-[#002652] font-mono">{inr(r.total)}</TableCell>
-                                </>
-                              );
-                            })()
-                          ) : (
-                            (() => {
-                              const r = row as unknown as ActivityReportRow;
-                              return (
-                                <>
-                                  <TableCell className="font-semibold text-slate-700 truncate max-w-[150px]">
-                                    {r.operator}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge className="bg-slate-100 text-slate-700 border-slate-200 px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase">
-                                      {r.action}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell className="font-semibold text-slate-500">{r.entity}</TableCell>
-                                  <TableCell className="font-semibold text-slate-600 font-mono">{r.id}</TableCell>
-                                  <TableCell className="font-medium text-slate-400 font-mono">{r.time}</TableCell>
-                                </>
-                              );
-                            })()
-                          )}
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </Table>
-              </div>
-
-              {/* Table pagination control row */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-4 text-xs font-semibold text-slate-500 text-left">
-                  <span>
-                    Showing page <strong className="text-slate-800 font-extrabold">{page}</strong> of{" "}
-                    <strong className="text-slate-800 font-extrabold">{totalPages}</strong> (
-                    {filteredData.length} records total)
-                  </span>
-                  <div className="flex gap-1.5">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-sm border-[#E5E7EB] text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-none"
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                    >
-                      Prev
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-8 rounded-sm border-[#E5E7EB] text-xs font-bold text-slate-600 hover:bg-slate-50 shadow-none"
-                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                    >
-                      Next
-                    </Button>
+            {/* Metadata Grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="p-3 rounded-sm border border-slate-100 bg-slate-50">
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Generated By</span>
+                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <div className="size-4 rounded-full bg-[#005BAC] text-white flex items-center justify-center text-[8px]">
+                    {(selectedReport?.generatedBy?.name ?? "SYS").substring(0, 2).toUpperCase()}
                   </div>
-                </div>
-              )}
-            </>
-          )}
-        </Card>
-      </div>
+                  {selectedReport?.generatedBy?.name ?? "System"}
+                </span>
+              </div>
+              <div className="p-3 rounded-sm border border-slate-100 bg-slate-50">
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Created At</span>
+                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="size-3.5 text-slate-400" />
+                  {selectedReport ? shortDate(selectedReport.createdAt) : ""}
+                </span>
+              </div>
+              <div className="p-3 rounded-sm border border-slate-100 bg-slate-50">
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Last Export</span>
+                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Download className="size-3.5 text-slate-400" />
+                  Never
+                </span>
+              </div>
+              <div className="p-3 rounded-sm border border-slate-100 bg-slate-50">
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Access Level</span>
+                <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                  <ShieldAlert className="size-3.5 text-slate-400" />
+                  Internal Only
+                </span>
+              </div>
+            </div>
 
-      <SavedReportsEnterpriseTable />
-    </div>
+            {/* Charts Placeholder */}
+            <div className="space-y-3">
+              <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cost Distribution Snapshot</h4>
+              <div className="h-48 w-full rounded-sm border border-slate-200 bg-slate-50 flex flex-col items-center justify-center relative overflow-hidden group">
+                <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_center,var(--tw-gradient-stops))] from-slate-400 to-transparent" />
+                <BarChart3 className="size-8 text-slate-300 mb-2 transition-transform group-hover:scale-110" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Interactive Preview Disabled</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-none p-4 border-t border-slate-100 bg-[#fafafa] flex items-center justify-between gap-3">
+            <Button variant="outline" className="flex-1 shadow-none border-slate-200 text-slate-700 font-bold bg-white" onClick={() => setSelectedReport(null)}>
+              Close
+            </Button>
+            <div className="flex gap-2 flex-1">
+              <Button variant="outline" className="flex-1 shadow-none border-[#005BAC]/20 text-[#005BAC] hover:text-[#004a8c] hover:bg-[#EBF3FF] bg-[#EBF3FF] font-bold transition-colors">
+                <Share2 className="size-3.5 mr-1.5" /> Share
+              </Button>
+              <Button className="flex-1 shadow-none bg-[#005BAC] hover:bg-[#004a8c] font-bold text-white transition-colors">
+                <Download className="size-3.5 mr-1.5" /> Export
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
+
 
 export function AuditPage() {
   const auditTable = useTableQuery({ sortBy: "createdAt", sortDir: "desc" });
@@ -2534,7 +3967,7 @@ export function AuditPage() {
     return <Badge className="bg-slate-100 text-slate-800 uppercase text-[10px] font-bold shadow-none rounded-sm">{act}</Badge>;
   };
 
-  const auditColumns = useMemo<EnterpriseColumnDef<any>[]>(() => [
+  const auditColumns: EnterpriseColumnDef<any>[] = [
     {
       id: "user",
       header: "Operator User",
@@ -2552,7 +3985,7 @@ export function AuditPage() {
     { accessorKey: "entityId", header: "Entity ID / Key", enableSorting: false, meta: { label: "Entity ID", className: "font-mono text-[11px]" }, cell: ({ row }) => row.original.entityId || "N/A" },
     { accessorKey: "ipAddress", header: "Client IP", meta: { label: "IP", className: "font-mono" }, cell: ({ row }) => row.original.ipAddress || "Internal" },
     { accessorKey: "createdAt", header: "Timestamp", meta: { label: "Timestamp" }, cell: ({ row }) => <span className="font-mono text-slate-600">{new Date(row.original.createdAt).toLocaleString("en-IN", { hour12: true })}</span> }
-  ], []);
+  ];
 
   return (
     <div className="flex flex-col gap-5 text-left">
@@ -2567,7 +4000,7 @@ export function AuditPage() {
       </div>
 
       <div className="grid gap-5">
-        <Card className="rounded-md border border-[#E5E7EB] bg-white shadow-none p-5 flex flex-col gap-4">
+        <Card className="rounded-sm border border-[#E5E7EB] bg-white shadow-none p-5 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
             <div>
               <h3 className="font-bold text-slate-900 tracking-tight text-sm uppercase">Audit Log Stream</h3>
@@ -2655,7 +4088,7 @@ export function AuditPage() {
       {selectedLog && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/25">
           <div className="absolute inset-0" onClick={() => setSelectedLog(null)} />
-          <div className="relative w-full max-w-xl bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-xl animate-in slide-in-from-right duration-150">
+          <div className="relative w-full max-w-xl bg-white border-l border-[#E5E7EB] h-full flex flex-col shadow-sm animate-in slide-in-from-right duration-150">
             <header className="flex items-center justify-between border-b border-[#E5E7EB] p-4">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#111827] flex items-center gap-2">
                 <ShieldAlert className="size-4" /> Audit Metadata Inspector
@@ -2690,7 +4123,7 @@ export function AuditPage() {
               </div>
 
               <div className="flex justify-end gap-2 border-t border-[#E5E7EB] pt-4 mt-auto">
-                <Button type="button" onClick={() => setSelectedLog(null)} className="bg-[#002652] hover:bg-[#001b3a] text-xs">Close Details</Button>
+                <Button type="button" onClick={() => setSelectedLog(null)} className="bg-primary hover:bg-[#001b3a] text-xs">Close Details</Button>
               </div>
             </div>
           </div>

@@ -16,6 +16,13 @@ export const createGradeSchema = z.object({
   chemicalComposition: propertySchema
 });
 
+export const createGradeMaterialSchema = z.object({
+  rawMaterialId: z.string().uuid("Invalid raw material ID."),
+  compositionPercentage: z.coerce.number().min(0).max(100),
+  isOptional: z.boolean().default(false)
+});
+
+export const updateGradeMaterialSchema = createGradeMaterialSchema.partial();
 export const updateGradeSchema = createGradeSchema.partial();
 
 export const gradeQuerySchema = z.object({
@@ -31,3 +38,7 @@ export const gradeQuerySchema = z.object({
 export type CreateGradeInput = z.infer<typeof createGradeSchema>;
 export type UpdateGradeInput = z.infer<typeof updateGradeSchema>;
 export type GradeQueryInput = z.infer<typeof gradeQuerySchema>;
+export type CreateGradeMaterialInput = z.infer<typeof createGradeMaterialSchema>;
+export type UpdateGradeMaterialInput = z.infer<typeof updateGradeMaterialSchema>;
+
+export type CloneGradeInput = { code?: string, name?: string };

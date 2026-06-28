@@ -1,3 +1,4 @@
+export * from "./comparison.js";
 export type RoleName = "COSTING_DEPARTMENT" | "PDQC";
 
 export type Actor = {
@@ -5,7 +6,7 @@ export type Actor = {
   email: string;
   name: string;
   role: RoleName;
-  department?: string;
+  department?: "COSTING" | "PDQC";
 };
 
 export type Price = { 
@@ -38,11 +39,52 @@ export type Grade = {
   chemicalComposition: Record<string, string>;
 };
 
+export type GradeMaster = {
+  id: string;
+  code: string | null;
+  metalId: string;
+  name: string;
+  category: string | null;
+  steelType: string | null;
+  subGrade: string | null;
+  targetBatchQty: number | null;
+  description: string | null;
+  multiplier: number;
+  extraPrice: number;
+  status: "DRAFT" | "SUBMITTED" | "APPROVED" | "ACTIVE" | "INACTIVE";
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type GradeMaterial = {
+  id: string;
+  gradeId: string;
+  materialId: string;
+  compositionPercent: number;
+  autoQuantity: number | null;
+  sortOrder: number;
+  material?: RawMaterial;
+};
+
 export type RawMaterial = { 
   id: string; 
-  name: string; 
-  code: string; 
-  prices: Price[]; 
+  rawMatId: number;
+  name: string;
+  code: string;
+  category: string;
+  unit: string;
+  supplier: string | null;
+  alloyName: string;
+  alloyDescription: string | null;
+  isAvail: boolean;
+  isMicro: boolean;
+  currentRate: number;
+  prices?: Price[];
+  updatedBy?: { name: string };
+  updatedById?: string | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 };
 
 export type Alloy = { 
@@ -78,6 +120,7 @@ export type Calculation = {
   createdAt: string;
   alloy?: Alloy | null;
   user?: { name: string };
+  snapshot?: any;
 };
 
 export type SeriesPoint = { 

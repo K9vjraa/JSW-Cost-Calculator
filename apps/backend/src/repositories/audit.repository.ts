@@ -85,7 +85,7 @@ export async function listAuditLogs(filter: AuditListFilter) {
       where,
       include: {
         user: {
-          select: { name: true, email: true, role: { select: { name: true } } }
+          select: { name: true, email: true, role: true }
         }
       },
       orderBy: sort.orderBy,

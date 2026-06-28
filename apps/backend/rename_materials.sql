@@ -1,0 +1,10 @@
+ALTER TABLE "ferro_alloy_master" RENAME TO "materials";
+ALTER TABLE "materials" RENAME COLUMN "RAW_MAT_CD" TO "material_code";
+ALTER TABLE "materials" RENAME COLUMN "ALLOY_NAME" TO "material_name";
+ALTER TABLE "materials" RENAME COLUMN "CURRENT_RATE" TO "current_rate";
+ALTER TABLE "materials" RENAME COLUMN "IS_AVAIL" TO "is_active";
+ALTER TABLE "materials" RENAME COLUMN "IS_MICRO" TO "is_micro";
+ALTER TABLE "materials" RENAME COLUMN "ALLOY_DESCRIPTION" TO "description";
+ALTER TABLE "materials" RENAME COLUMN "UPDATED_BY_ID" TO "updated_by_id";
+ALTER TABLE "materials" RENAME COLUMN "CREATED_AT" TO "created_at";
+ALTER TABLE "materials" RENAME COLUMN "UPDATED_AT" TO "updated_at";

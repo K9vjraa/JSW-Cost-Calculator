@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DashboardPage } from "./Dashboards";
 import { MemoryRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Mock Zustand auth store
 vi.mock("@/store/auth", () => {
@@ -13,26 +14,41 @@ vi.mock("@/store/auth", () => {
   };
 });
 
-// Mock useRemote hook to return mock dashboard data synchronously
-vi.mock("@/hooks/useRemote", () => {
+// Mock apiClient to return mock dashboard data
+import { adminDashboard } from "@/data/fixtures";
+vi.mock("@/services/api/client", () => {
   return {
-    useRemote: (_loader: unknown, fallback: unknown) => ({
-      data: fallback,
-      loading: false
-    })
+    apiClient: {
+      get: vi.fn((url: string) => {
+        if (url === "/dashboard/admin") {
+          return Promise.resolve({ data: adminDashboard });
+        }
+        return Promise.resolve({ data: {} });
+      })
+    }
   };
 });
 
 describe("DashboardPage Component", () => {
-  it("renders Admin Dashboard correctly for ADMIN role", () => {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  it("renders Admin Dashboard correctly for COSTING_DEPARTMENT role", async () => {
     render(
-      <MemoryRouter>
-        <DashboardPage />
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <DashboardPage />
+        </MemoryRouter>
+      </QueryClientProvider>
     );
 
-    expect(screen.getByText(/System Control Dashboard/i)).toBeDefined();
-    expect(screen.getByText(/Calculations Saved/i)).toBeDefined();
-    expect(screen.getByText(/Configured Alloys/i)).toBeDefined();
+    expect(await screen.findByText(/System Control Dashboard/i)).toBeDefined();
+    expect(await screen.findByText(/Calculations Saved/i)).toBeDefined();
+    expect(await screen.findByText(/Configured Alloys/i)).toBeDefined();
   });
 });

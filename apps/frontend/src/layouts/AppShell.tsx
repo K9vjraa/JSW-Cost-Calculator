@@ -2,23 +2,14 @@ import { useEffect, useState, useMemo } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { 
   Bell, 
-  Boxes, 
-  Calculator, 
-  ClipboardList, 
-  FileBarChart2, 
-  GitCompareArrows, 
   LogOut, 
   Menu, 
   Settings, 
-  ShieldCheck, 
-  Users, 
   X, 
   Search, 
   ChevronLeft, 
-  ChevronRight, 
-  User,
-  Layers,
-  DollarSign
+  ChevronRight,
+  User
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -33,19 +24,7 @@ import { useNotificationStore } from "../store/notificationStore";
 import { useLiveNotifications } from "../hooks/useLiveNotifications";
 import { ToastContainer } from "../components/ToastContainer";
 import { NotificationPanel } from "../components/NotificationPanel";
-
-const nav = [
-  { to: "/dashboard", label: "Dashboard", icon: FileBarChart2, roles: ["COSTING_DEPARTMENT", "PDQC"] },
-  { to: "/workspace", label: "Calculation Workspace", icon: Calculator, roles: ["COSTING_DEPARTMENT", "PDQC"] },
-  { to: "/material-master", label: "Material Master", icon: Boxes, roles: ["COSTING_DEPARTMENT"] },
-  { to: "/material-rates", label: "Material Rates", icon: DollarSign, roles: ["COSTING_DEPARTMENT"] },
-  { to: "/grade-builder", label: "Grade Builder", icon: Layers, roles: ["COSTING_DEPARTMENT", "PDQC"] },
-  { to: "/grade-comparison", label: "Grade Comparison", icon: GitCompareArrows, roles: ["COSTING_DEPARTMENT", "PDQC"] },
-  { to: "/reports", label: "Reports", icon: ClipboardList, roles: ["COSTING_DEPARTMENT", "PDQC"] },
-  { to: "/audit-logs", label: "Audit Logs", icon: ShieldCheck, roles: ["COSTING_DEPARTMENT"] },
-  { to: "/user-management", label: "User Management", icon: Users, roles: ["COSTING_DEPARTMENT"] },
-  { to: "/settings", label: "Settings", icon: Settings, roles: ["COSTING_DEPARTMENT"] }
-] as const;
+import { navigationConfig } from "../config/navigation";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { actor, logout } = useAuth();
@@ -165,9 +144,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return items;
   }, [location.pathname, actor]);
 
-  // Dynamic Role-based navigation filtering
+  // Dynamic Department-based navigation filtering
   const visibleNavItems = useMemo(() => {
-    return nav.filter((item) => actor && (item.roles as readonly string[]).includes(actor.role));
+    if (!actor || !actor.department) return [];
+    return navigationConfig[actor.department as keyof typeof navigationConfig] || [];
   }, [actor]);
 
 
@@ -194,10 +174,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.15 }}
-                className="text-left overflow-hidden"
+                className="text-left overflow-hidden flex flex-col"
               >
-                <div className="text-2xl font-black italic tracking-wide text-[#002652]">JSW</div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold mt-0.5 whitespace-nowrap">
+                <img src="/jsw-logo.jpg" alt="JSW Steel Logo" className="h-14 w-auto object-contain self-start" />
+                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-extrabold mt-1.5 whitespace-nowrap border-l-2 border-slate-300 pl-1.5">
                   Cost Management System
                 </div>
               </motion.div>
@@ -208,16 +188,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.8 }}
                 transition={{ duration: 0.15 }}
-                className="mx-auto text-xl font-black italic tracking-wider text-[#002652]"
+                className="mx-auto"
               >
-                JSW
+                <img src="/jsw-logo.jpg" alt="JSW" className="h-10 w-auto object-contain" />
               </motion.div>
             )}
           </AnimatePresence>
 
           <button
             onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-md p-1 cursor-pointer transition-colors shrink-0 ml-auto"
+            className="text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-sm p-1 cursor-pointer transition-colors shrink-0 ml-auto"
             title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
             aria-label={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
           >
@@ -227,7 +207,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Nav links */}
         <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1" aria-label="Pages">
-          {visibleNavItems.map(({ to, label, icon: Icon }) => {
+          {visibleNavItems.length === 0 ? (
+            <div className="text-center p-4 text-xs font-semibold text-slate-400 border border-dashed border-slate-200 rounded-sm mt-2">
+              No modules assigned to your department.
+            </div>
+          ) : visibleNavItems.map(({ to, label, icon: Icon }) => {
             const isActive = location.pathname === to;
             return (
               <NavLink
@@ -235,16 +219,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 to={to}
                 title={isSidebarCollapsed ? label : undefined}
                 onMouseEnter={() => prefetchRoute(to)}
-                className={`flex h-10 items-center gap-3 rounded-md transition-all decoration-none overflow-hidden ${
+                className={`flex h-10 items-center gap-3 rounded-sm transition-all decoration-none overflow-hidden ${
                   isSidebarCollapsed ? "px-0 justify-center" : "px-3"
                 } ${
                   isActive 
-                    ? "bg-slate-100 text-[#002652] font-semibold border border-slate-200" 
+                    ? "bg-slate-100 text-jsw-corp font-semibold border border-slate-200" 
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon className={`size-4 shrink-0 ${isActive ? "text-[#002652]" : "text-slate-500"}`} />
+                <Icon className={`size-4 shrink-0 ${isActive ? "text-jsw-corp" : "text-slate-500"}`} />
                 <AnimatePresence>
                   {!isSidebarCollapsed && (
                     <motion.span
@@ -311,15 +295,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               {/* Drawer header */}
               <div className="flex h-20 items-center justify-between border-b border-slate-200 px-5 shrink-0">
-                <div className="text-left">
-                  <div className="text-2xl font-black italic tracking-wide text-[#002652]">JSW</div>
-                  <div className="text-[10px] text-slate-500 uppercase tracking-widest font-extrabold mt-0.5">
+                <div className="text-left flex flex-col">
+                  <img src="/jsw-logo.jpg" alt="JSW Steel Logo" className="h-12 w-auto object-contain self-start" />
+                  <div className="text-[9px] text-slate-500 uppercase tracking-widest font-extrabold mt-1.5 border-l-2 border-slate-300 pl-1.5">
                     Metal Cost System
                   </div>
                 </div>
                 <button
                   onClick={() => setMobileSidebarOpen(false)}
-                  className="text-slate-500 hover:bg-slate-100 rounded-md p-1.5 cursor-pointer transition-colors"
+                  className="text-slate-500 hover:bg-slate-100 rounded-sm p-1.5 cursor-pointer transition-colors"
                   aria-label="Close navigation menu"
                 >
                   <X className="size-5" />
@@ -328,16 +312,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
               {/* Drawer nav */}
               <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-1" aria-label="Mobile pages">
-                {visibleNavItems.map(({ to, label, icon: Icon }) => (
+                {visibleNavItems.length === 0 ? (
+                  <div className="text-center p-4 text-xs font-semibold text-slate-400 border border-dashed border-slate-200 rounded-sm mt-2">
+                    No modules assigned to your department.
+                  </div>
+                ) : visibleNavItems.map(({ to, label, icon: Icon }) => (
                   <NavLink
                     key={to}
                     to={to}
                     onClick={() => setMobileSidebarOpen(false)}
                     onMouseEnter={() => prefetchRoute(to)}
                     className={({ isActive }) =>
-                      `flex h-10 items-center gap-3 rounded-md px-3.5 text-xs font-semibold transition-all decoration-none ${
+                      `flex h-10 items-center gap-3 rounded-sm px-3.5 text-xs font-semibold transition-all decoration-none ${
                         isActive 
-                          ? "bg-slate-100 text-[#002652] border border-slate-200" 
+                          ? "bg-slate-100 text-jsw-corp border border-slate-200" 
                           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                       }`
                     }
@@ -357,7 +345,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     size="sm"
                     onClick={handleLogout}
                     leftIcon={<LogOut className="size-3.5" />}
-                    className="w-full text-xs font-bold py-1.5 justify-center rounded-md mt-3"
+                    className="w-full text-xs font-bold py-1.5 justify-center rounded-sm mt-3"
                   >
                     Sign Out
                   </Button>
@@ -380,7 +368,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 min-w-0 flex-1">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden border border-slate-200 rounded-md p-2 hover:bg-slate-50 cursor-pointer transition-colors shrink-0"
+              className="lg:hidden border border-slate-200 rounded-sm p-2 hover:bg-slate-50 cursor-pointer transition-colors shrink-0"
               aria-label="Open navigation menu"
               aria-expanded={mobileSidebarOpen}
             >
@@ -394,7 +382,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   {idx > 0 && <ChevronRight className="size-3.5 text-slate-300" aria-hidden="true" />}
                   <NavLink
                     to={crumb.to}
-                    className={`hover:text-[#002652] transition-colors decoration-none ${
+                    className={`hover:text-jsw-corp transition-colors decoration-none ${
                       idx === breadcrumbs.length - 1 ? "text-slate-700 font-bold" : "font-medium"
                     }`}
                     aria-current={idx === breadcrumbs.length - 1 ? "page" : undefined}
@@ -414,10 +402,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* Right: Actions */}
           <div className="flex items-center gap-2 shrink-0">
             
+            {/* Department Badge */}
+            {actor?.department && (
+              <div className="hidden sm:flex items-center px-2 py-1 mr-2 rounded bg-blue-50 border border-blue-200 text-jsw-corp text-[10px] font-bold tracking-wider uppercase">
+                {actor.department} DEPARTMENT
+              </div>
+            )}
+
             {/* Search bar (desktop) */}
             <div 
               onClick={() => setSearchOpen(true)}
-              className="hidden md:flex items-center gap-2 border border-slate-200 hover:border-[#002652]/60 bg-slate-50 hover:bg-white transition-all rounded-md px-3 py-1.5 cursor-pointer text-slate-400 text-xs w-44 xl:w-56 select-none"
+              className="hidden md:flex items-center gap-2 border border-slate-200 hover:border-jsw-corp/60 bg-slate-50 hover:bg-white transition-all rounded-sm px-3 py-1.5 cursor-pointer text-slate-400 text-xs w-44 xl:w-56 select-none"
               role="button"
               aria-label="Open quick search (Ctrl+K)"
               tabIndex={0}
@@ -433,7 +428,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Search button (mobile) */}
             <button 
               onClick={() => setSearchOpen(true)}
-              className="md:hidden border border-slate-200 rounded-md p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors"
+              className="md:hidden border border-slate-200 rounded-sm p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors"
               aria-label="Open search"
             >
               <Search className="size-4" />
@@ -443,8 +438,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="relative">
               <button
                 onClick={() => { setNoticeOpen(true); setProfileOpen(false); }}
-                className={`relative border border-slate-200 rounded-md p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors ${
-                  noticeOpen ? "bg-slate-100 border-[#002652]" : ""
+                className={`relative border border-slate-200 rounded-sm p-2 hover:bg-slate-50 cursor-pointer text-slate-600 transition-colors ${
+                  noticeOpen ? "bg-slate-100 border-jsw-corp" : ""
                 }`}
                 aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
                 aria-expanded={noticeOpen}
@@ -467,8 +462,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="relative">
                 <button
                   onClick={() => { setProfileOpen(!profileOpen); setNoticeOpen(false); }}
-                  className={`flex items-center gap-2 border border-slate-200 hover:border-[#002652] rounded-md p-1.5 pr-2.5 bg-slate-50 hover:bg-white cursor-pointer transition-all ${
-                    profileOpen ? "border-[#002652]" : ""
+                  className={`flex items-center gap-2 border border-slate-200 hover:border-jsw-corp rounded-sm p-1.5 pr-2.5 bg-slate-50 hover:bg-white cursor-pointer transition-all ${
+                    profileOpen ? "border-jsw-corp" : ""
                   }`}
                   aria-label="Profile menu"
                   aria-expanded={profileOpen}
@@ -496,14 +491,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 5 }}
                         transition={{ duration: 0.15 }}
-                        className="absolute right-0 mt-3 w-56 rounded-md border border-slate-200 bg-white p-3 z-20 text-left flex flex-col gap-2"
+                        className="absolute right-0 mt-3 w-56 rounded-sm border border-slate-200 bg-white p-3 z-20 text-left flex flex-col gap-2"
                         role="menu"
                         aria-label="Profile options"
                       >
                         <div className="p-1 pb-2 border-b border-slate-100">
                           <strong className="block text-xs font-bold text-slate-800">{actor.name}</strong>
-                          <span className="block text-[9px] font-semibold text-[#56657a] uppercase tracking-wider mt-0.5">
-                            {actor.role} Account
+                          <span className="block text-[9px] font-semibold text-[#56657a] mt-0.5 truncate">
+                            {actor.email}
+                          </span>
+                          <span className="block text-[9px] font-semibold text-[#56657a] uppercase tracking-wider mt-1 border-t border-slate-100 pt-1">
+                            Role: {actor.role}
+                          </span>
+                          <span className="block text-[9px] font-semibold text-blue-600 uppercase tracking-wider mt-0.5">
+                            Dept: {actor.department}
                           </span>
                         </div>
                         
@@ -531,7 +532,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                           size="sm"
                           onClick={handleLogout}
                           leftIcon={<LogOut className="size-3.5" />}
-                          className="w-full text-xs font-bold py-1.5 justify-center rounded-md mt-1"
+                          className="w-full text-xs font-bold py-1.5 justify-center rounded-sm mt-1"
                         >
                           Sign Out Session
                         </Button>

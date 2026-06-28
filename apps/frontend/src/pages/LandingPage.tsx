@@ -261,17 +261,9 @@ export function LandingPage() {
           
           {/* Logo */}
           <div className="flex items-center gap-3 select-none cursor-pointer" onClick={() => navigate("/")}>
-            <div className="flex flex-col gap-0.5">
-              {/* Stylized JSW emblem */}
-              <div className="flex gap-1 items-end">
-                <span className="w-1.5 h-6 bg-[#003B7A]" />
-                <span className="w-1.5 h-4 bg-[#D97706]" />
-                <span className="w-1.5 h-5 bg-[#4B5563]" />
-              </div>
-            </div>
+            <img src="/jsw-logo.jpg" alt="JSW Steel Logo" className="h-16 w-auto object-contain" />
             <div className="flex flex-col text-left">
-              <span className="font-geist font-black text-lg leading-none tracking-tight text-[#003B7A]">JSW STEEL</span>
-              <span className="font-geist text-[10px] font-extrabold tracking-widest text-[#4B5563] uppercase">MCMS</span>
+              <span className="font-geist text-[12px] font-extrabold tracking-widest text-[#4B5563] uppercase border-l-2 border-slate-300 pl-2 ml-1">MCMS</span>
             </div>
           </div>
 
@@ -355,7 +347,7 @@ export function LandingPage() {
               </button>
               <a 
                 href="#platform" 
-                className="border border-gray-300 text-[#111827] hover:bg-gray-100/60 px-8 py-4 rounded font-bold font-geist text-sm transition-all"
+                className="border border-gray-300 text-[#111827] hover:bg-slate-50/60 px-8 py-4 rounded font-bold font-geist text-sm transition-all"
               >
                 View Platform
               </a>
@@ -396,7 +388,7 @@ export function LandingPage() {
           >
             
             {/* Visual Container */}
-            <div className="relative w-full max-w-md bg-white border border-gray-200 rounded-lg p-6 shadow-sm overflow-hidden">
+            <div className="relative w-full max-w-md bg-white border border-gray-200 rounded-sm p-6 shadow-sm overflow-hidden">
               <div className="absolute top-3 left-4 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 <span className="font-geist text-[9px] font-bold tracking-wider text-gray-400 uppercase">SYS_VIZ_ENGINE // ST-04</span>
@@ -670,7 +662,7 @@ export function LandingPage() {
                 
                 {/* Layer 4: Audit Logs (Bottom of stack) */}
                 <div 
-                  className="absolute inset-0 bg-white border border-gray-200 rounded-md p-4 shadow-sm transition-transform duration-500 font-mono text-[10px] text-gray-500 flex flex-col justify-between"
+                  className="absolute inset-0 bg-white border border-gray-200 rounded-sm p-4 shadow-sm transition-transform duration-500 font-mono text-[10px] text-gray-500 flex flex-col justify-between"
                   style={{
                     transform: "translateZ(-80px) translateY(80px) rotateX(15deg) rotateY(-15deg) rotateZ(5deg)",
                   }}
@@ -689,7 +681,7 @@ export function LandingPage() {
 
                 {/* Layer 3: Price Master Database */}
                 <div 
-                  className="absolute inset-0 bg-white border border-gray-200 rounded-md p-4 shadow-sm transition-transform duration-500 text-left flex flex-col"
+                  className="absolute inset-0 bg-white border border-gray-200 rounded-sm p-4 shadow-sm transition-transform duration-500 text-left flex flex-col"
                   style={{
                     transform: "translateZ(-40px) translateY(40px) rotateX(15deg) rotateY(-15deg) rotateZ(5deg)",
                   }}
@@ -717,7 +709,7 @@ export function LandingPage() {
 
                 {/* Layer 2: Comparison Engine */}
                 <div 
-                  className="absolute inset-0 bg-white border border-gray-200 rounded-md p-4 shadow-sm transition-transform duration-500 text-left flex flex-col"
+                  className="absolute inset-0 bg-white border border-gray-200 rounded-sm p-4 shadow-sm transition-transform duration-500 text-left flex flex-col"
                   style={{
                     transform: "translateZ(0px) translateY(0px) rotateX(15deg) rotateY(-15deg) rotateZ(5deg)",
                   }}
@@ -741,7 +733,7 @@ export function LandingPage() {
 
                 {/* Layer 1: Cost Workspace (Top layer, detailed visual) */}
                 <div 
-                  className="absolute inset-0 bg-white border border-[#003B7A] rounded-md p-4 shadow-md transition-all duration-500 text-left flex flex-col justify-between hover:scale-[1.02]"
+                  className="absolute inset-0 bg-white border border-[#003B7A] rounded-sm p-4 shadow-sm transition-all duration-500 text-left flex flex-col justify-between hover:scale-[1.02]"
                   style={{
                     transform: "translateZ(40px) translateY(-40px) rotateX(15deg) rotateY(-15deg) rotateZ(5deg)",
                   }}
@@ -906,7 +898,7 @@ export function LandingPage() {
             ].map((feat, idx) => {
               const Icon = feat.icon;
               return (
-                <div key={idx} className="border border-gray-100 hover:border-gray-200 rounded-lg p-6 text-left flex flex-col justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+                <div key={idx} className="border border-gray-100 hover:border-gray-200 rounded-sm p-6 text-left flex flex-col justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
                   <div>
                     <div className="size-10 rounded-full bg-[#003B7A]/5 flex items-center justify-center text-[#003B7A] mb-4">
                       <Icon className="size-5" />
@@ -978,7 +970,7 @@ export function LandingPage() {
           <div className="flex flex-wrap justify-center gap-4 mt-10">
             <button 
               onClick={handleLaunchWorkspace} 
-              className="bg-white hover:bg-gray-100 text-[#003B7A] px-8 py-4 rounded font-bold font-geist text-sm transition-all shadow-md flex items-center gap-2"
+              className="bg-white hover:bg-slate-50 text-[#003B7A] px-8 py-4 rounded font-bold font-geist text-sm transition-all shadow-sm flex items-center gap-2"
             >
               Launch MCMS Workspace
               <ArrowRight className="size-4" />
@@ -1004,14 +996,9 @@ export function LandingPage() {
           {/* Logo Column */}
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-3 select-none">
-              <div className="flex gap-1 items-end">
-                <span className="w-1.5 h-6 bg-white" />
-                <span className="w-1.5 h-4 bg-[#D97706]" />
-                <span className="w-1.5 h-5 bg-gray-500" />
-              </div>
+              <img src="/jsw-logo.jpg" alt="JSW Steel Logo" className="h-16 w-auto object-contain brightness-0 invert" />
               <div className="flex flex-col text-left">
-                <span className="font-geist font-black text-lg leading-none tracking-tight">JSW STEEL</span>
-                <span className="font-geist text-[10px] font-extrabold tracking-widest text-gray-500 uppercase">MCMS</span>
+                <span className="font-geist text-[12px] font-extrabold tracking-widest text-gray-400 uppercase border-l-2 border-gray-600 pl-2 ml-1">MCMS</span>
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2 font-normal leading-relaxed max-w-[200px]">

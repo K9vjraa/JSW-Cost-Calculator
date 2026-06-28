@@ -34,7 +34,7 @@ dashboardRoutes.get("/admin", allowRoles("COSTING_DEPARTMENT"), asyncRoute(async
     prisma.calculation.count(),
     prisma.alloy.count({ where: { status: "ACTIVE" } }),
     prisma.rawMaterial.count({ where: { status: "ACTIVE" } }),
-    prisma.user.count({ where: { status: "ACTIVE" } }),
+    prisma.user.count(),
     prisma.metal.count({ where: { status: "ACTIVE" } }),
     prisma.calculation.findMany({ include: { user: { select: { name: true } }, alloy: true }, orderBy: { updatedAt: "desc" }, take: 5 }),
     prisma.auditLog.findMany({ include: { user: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 6 }),
@@ -49,7 +49,7 @@ dashboardRoutes.get("/admin", allowRoles("COSTING_DEPARTMENT"), asyncRoute(async
     recent,
     activity,
     notices,
-    systemSummary: { roles: await prisma.role.count(), gstSlabs: await prisma.gstSlab.count({ where: { active: true } }), priceLists: await prisma.priceList.count({ where: { active: true } }), reports: await prisma.report.count() }
+    systemSummary: { roles: 2, gstSlabs: await prisma.gstSlab.count({ where: { active: true } }), priceLists: await prisma.priceList.count({ where: { active: true } }), reports: await prisma.report.count() }
   });
 }));
 

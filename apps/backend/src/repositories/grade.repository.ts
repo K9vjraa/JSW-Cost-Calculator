@@ -49,5 +49,33 @@ export async function deactivateGrade(id: string) {
 }
 
 export async function findGradeById(id: string) {
-  return prisma.grade.findUnique({ where: { id }, include: { metal: true } });
+  return prisma.grade.findUnique({ 
+    where: { id }, 
+    include: { 
+      metal: true,
+      gradeMaterials: { include: { material: true } },
+      mechanicalProperty: true,
+      chemicalProperty: true
+    } 
+  });
+}
+
+export async function createGradeMaterial(gradeId: string, data: any) {
+  return prisma.gradeMaterial.create({ data: { ...data, gradeId } });
+}
+
+export async function updateGradeMaterial(id: string, data: any) {
+  return prisma.gradeMaterial.update({ where: { id }, data });
+}
+
+export async function deleteGradeMaterial(id: string) {
+  return prisma.gradeMaterial.delete({ where: { id } });
+}
+
+export async function createGradeValidationLog(data: any) {
+  return prisma.gradeValidationLog.create({ data });
+}
+
+export async function createGradeHistory(data: any) {
+  return prisma.gradeHistory.create({ data });
 }

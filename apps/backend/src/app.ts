@@ -20,6 +20,7 @@ import { reportRoutes } from "./routes/reports.js";
 import { userRoutes } from "./routes/users.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { searchRoutes } from "./routes/search.js";
+import { materialRoutes } from "./routes/material.routes.js";
  
 export function createServer() {
   const app = express();
@@ -38,6 +39,7 @@ export function createServer() {
   app.use("/api/auth", authRoutes);
   app.use("/api/dashboard", authenticate, auditMiddleware, dashboardRoutes);
   app.use("/api", authenticate, auditMiddleware, masterRoutes);
+  app.use("/api/materials", authenticate, auditMiddleware, materialRoutes);
   app.use("/api/calculations", authenticate, auditMiddleware, calculationRoutes);
   app.use("/api/comparisons", authenticate, auditMiddleware, comparisonRoutes);
   app.use("/api/reports", authenticate, auditMiddleware, reportRoutes);

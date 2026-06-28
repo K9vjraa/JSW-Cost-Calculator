@@ -14,12 +14,20 @@ vi.mock("@/store/auth", () => ({
 
 vi.mock("@/store/workspaceStore", () => ({
   useWorkspaceStore: () => ({
-    items: [],
-    mode: "alloy",
+    mode: "metal",
     setMode: vi.fn(),
-    addItem: vi.fn(),
-    removeItem: vi.fn(),
-    updateItem: vi.fn()
+    cards: [],
+    setCards: vi.fn(),
+    selectedCardId: null,
+    setSelectedCardId: vi.fn(),
+    summaryItems: [],
+    setSummaryItems: vi.fn(),
+    removeSummaryItem: vi.fn(),
+    clearSummary: vi.fn(),
+    activeCalculationId: null,
+    setActiveCalculationId: vi.fn(),
+    lastSavedAt: null,
+    setLastSavedAt: vi.fn()
   })
 }));
 
@@ -85,8 +93,8 @@ describe("WorkspacePage Component", () => {
     );
 
     // Should find workspace mode selection elements
-    expect(screen.getByText(/JSW Cost Allocation Workspace/i)).toBeDefined();
+    expect(screen.getAllByText(/Calculation Workspace/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Metal Calculator/i)).toBeDefined();
-    expect(screen.getByText(/Central Locked Prices/i)).toBeDefined();
+    expect(screen.getByText(/Locked Prices/i)).toBeDefined();
   });
 });

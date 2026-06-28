@@ -25,16 +25,8 @@ vi.mock("../store/workspaceStore", () => ({
   useWorkspaceStore: () => ({})
 }));
 
-vi.mock("../store/calculationStore", () => ({
-  useCalculationStore: () => ({})
-}));
-
 vi.mock("../store/recipeStore", () => ({
   useRecipeStore: () => ({})
-}));
-
-vi.mock("../store/summaryStore", () => ({
-  useSummaryStore: () => ({})
 }));
 
 vi.mock("../store/productStore", () => ({

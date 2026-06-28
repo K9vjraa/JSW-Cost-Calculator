@@ -64,7 +64,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
     >
       <div className="flex flex-col gap-4">
         {/* Header summary panel */}
-        <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-[#edf5ff]/40">
+        <div className="flex items-center justify-between p-3 rounded-sm border border-slate-100 bg-[#edf5ff]/40">
           <div className="flex items-center gap-2">
             <BellRing className="size-4 text-[#0057b8]" />
             <span className="text-xs font-black text-[#10233d] tracking-tight">Active Surcharges & Audits</span>
@@ -92,7 +92,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
                 <div
                   key={n.id}
                   onClick={() => isUnread && handleMarkAsRead(n.id, n.title)}
-                  className={`flex flex-col gap-2 p-3.5 rounded-xl border text-left transition-all ${
+                  className={`flex flex-col gap-2 p-3.5 rounded-sm border text-left transition-all ${
                     isUnread
                       ? "border-[#bfd6f5] bg-[#edf5ff]/20 cursor-pointer hover:bg-[#edf5ff]/35 shadow-2xs"
                       : "border-slate-100 bg-white hover:bg-slate-50/40"
@@ -127,7 +127,7 @@ export function NotificationPanel({ isOpen, onClose }: NotificationPanelProps) {
                         </span>
                       ) : (
                         <span className="text-slate-400 flex items-center gap-0.5">
-                          <CheckCircle className="size-3 text-[#087443]" /> Read
+                          <CheckCircle className="size-3 text-success-fg" /> Read
                         </span>
                       )}
                     </span>

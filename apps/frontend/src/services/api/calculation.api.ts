@@ -15,6 +15,15 @@ export interface CalculationPayload {
   mode: "metal" | "alloy" | "raw-material";
   alloyId?: string | null;
   items: CalculationItemPayload[];
+  clientState?: Record<string, any>;
+}
+
+export interface PreviewResponse {
+  items: any[];
+  totalQuantity: string;
+  baseCost: string;
+  finalCost: string;
+  snapshot: any;
 }
 
 // ── Master API Endpoints ──────────────────────────────────────────────────────
@@ -31,7 +40,14 @@ export const calculationApi = {
     return data;
   },
 
-  previewCalculation: async (payload: CalculationPayload): Promise<unknown> => {
+  getLatestDraft: async (): Promise<Calculation | null> => {
+    const { data } = await apiClient.get<{ data: Calculation[] }>("/calculations", {
+      params: { status: "DRAFT", limit: 1 }
+    });
+    return data.data[0] || null;
+  },
+
+  previewCalculation: async (payload: CalculationPayload): Promise<PreviewResponse> => {
     const { data } = await apiClient.post("/calculations/preview", payload);
     return data;
   },
@@ -61,6 +77,15 @@ export function useCalculationsQuery() {
   });
 }
 
+export function useLatestDraftQuery() {
+  return useQuery({
+    queryKey: ["calculations", "draft", "latest"],
+    queryFn: calculationApi.getLatestDraft,
+    staleTime: 0,
+    retry: 1
+  });
+}
+
 export function useCalculationQuery(id: string) {
   return useQuery({
     queryKey: ["calculations", id],
@@ -83,6 +108,13 @@ export function useCreateCalculationMutation() {
       queryClient.invalidateQueries({ queryKey: ["calculations"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     }
+  });
+}
+
+export function usePreviewCalculationMutation() {
+  return useMutation({
+    mutationFn: calculationApi.previewCalculation,
+    retry: 1
   });
 }
 

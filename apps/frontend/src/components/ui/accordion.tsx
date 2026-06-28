@@ -5,7 +5,7 @@ import { cn } from "@/utils";
 
 export const Accordion = AccordionPrimitive.Root;
 export function AccordionItem({ className, ...props }: React.ComponentProps<typeof AccordionPrimitive.Item>) {
-  return <AccordionPrimitive.Item className={cn("overflow-hidden rounded-lg border bg-white", className)} {...props} />;
+  return <AccordionPrimitive.Item className={cn("overflow-hidden rounded-sm border bg-white", className)} {...props} />;
 }
 export function AccordionTrigger({ className, children, ...props }: React.ComponentProps<typeof AccordionPrimitive.Trigger>) {
   return (

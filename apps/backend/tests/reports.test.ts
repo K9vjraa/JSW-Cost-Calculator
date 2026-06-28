@@ -26,6 +26,7 @@ import { generateTestToken } from "./helpers/auth.js";
 vi.mock("../src/prisma/client.js", () => {
   return {
     prisma: {
+      user: { findUnique: vi.fn().mockResolvedValue({ isActive: true, status: 'ACTIVE' }) },
       report: {
         findMany: vi.fn(),
         findUnique: vi.fn(),

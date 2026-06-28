@@ -5,6 +5,7 @@ import { Search, X, ShieldAlert, Award, FileSpreadsheet, Calculator, Users, Cloc
 import { useGlobalSearchQuery } from "@/services/api/search.api";
 import { useDebounce, useSearchHistory, fuzzyMatchScore } from "@/hooks/useSearch";
 import { cn, inr } from "@jsw-mcms/ui";
+import { useAuth } from "@/store/auth";
 
 export interface CommandPaletteProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ type SearchCategory = "all" | "metals" | "grades" | "calculations" | "reports" |
 
 export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
+  const { actor } = useAuth();
   const [query, setQuery] = React.useState("");
   const debouncedQuery = useDebounce(query, 250);
   const [category, setCategory] = React.useState<SearchCategory>("all");
@@ -63,22 +65,26 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       onClick: () => void;
     }> = [];
 
+    const isCosting = actor?.role === "COSTING_DEPARTMENT";
+
     // Metals
-    data.metals.forEach((m) => {
-      const score = Math.max(fuzzyMatchScore(m.name, debouncedQuery), fuzzyMatchScore(m.code, debouncedQuery));
-      list.push({
-        id: `metal-${m.id}`,
-        title: m.name,
-        subtitle: `Code: ${m.code} | Category: ${m.category} | ${m.status}`,
-        category: "metals",
-        score,
-        onClick: () => {
-          addSearch(debouncedQuery || m.name);
-          navigate("/material-master");
-          onClose();
-        }
+    if (isCosting) {
+      data.metals.forEach((m) => {
+        const score = Math.max(fuzzyMatchScore(m.name, debouncedQuery), fuzzyMatchScore(m.code, debouncedQuery));
+        list.push({
+          id: `metal-${m.id}`,
+          title: m.name,
+          subtitle: `Code: ${m.code} | Category: ${m.category} | ${m.status}`,
+          category: "metals",
+          score,
+          onClick: () => {
+            addSearch(debouncedQuery || m.name);
+            navigate("/material-master");
+            onClose();
+          }
+        });
       });
-    });
+    }
 
     // Grades
     data.grades.forEach((g) => {
@@ -132,21 +138,23 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     });
 
     // Users
-    data.users.forEach((u) => {
-      const score = Math.max(fuzzyMatchScore(u.name, debouncedQuery), fuzzyMatchScore(u.email, debouncedQuery));
-      list.push({
-        id: `user-${u.id}`,
-        title: u.name,
-        subtitle: `Email: ${u.email} | Dept: ${u.department || "N/A"} | ${u.status}`,
-        category: "users",
-        score,
-        onClick: () => {
-          addSearch(debouncedQuery || u.name);
-          navigate("/user-management"); // Admin user management setting panel
-          onClose();
-        }
+    if (isCosting) {
+      data.users.forEach((u) => {
+        const score = Math.max(fuzzyMatchScore(u.name, debouncedQuery), fuzzyMatchScore(u.email, debouncedQuery));
+        list.push({
+          id: `user-${u.id}`,
+          title: u.name,
+          subtitle: `Email: ${u.email} | Dept: ${u.department || "N/A"} | ${u.status}`,
+          category: "users",
+          score,
+          onClick: () => {
+            addSearch(debouncedQuery || u.name);
+            navigate("/user-management"); // Admin user management setting panel
+            onClose();
+          }
+        });
       });
-    });
+    }
 
     // Filter by selected category tab
     const filtered = category === "all" ? list : list.filter((item) => item.category === category);
@@ -191,7 +199,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       case "calculations":
         return <Calculator className="size-4 text-[#f2994a]" />;
       case "reports":
-        return <FileSpreadsheet className="size-4 text-[#087443]" />;
+        return <FileSpreadsheet className="size-4 text-success-fg" />;
       case "users":
         return <Users className="size-4 text-[#032f67]" />;
     }
@@ -216,7 +224,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
             animate={{ y: 0, scale: 1, opacity: 1 }}
             exit={{ y: -15, scale: 0.98, opacity: 0 }}
             transition={{ type: "spring", damping: 25, stiffness: 350 }}
-            className="relative w-full max-w-2xl bg-white border border-[#d6dfeb] rounded-2xl shadow-2xl overflow-hidden flex flex-col z-10 text-left"
+            className="relative w-full max-w-2xl bg-white border border-[#d6dfeb] rounded-sm shadow-sm overflow-hidden flex flex-col z-10 text-left"
           >
             {/* Search Input Bar */}
             <div className="flex items-center gap-3 px-4 py-3.5 border-b border-[#d6dfeb]/50 bg-slate-50/50">
@@ -242,13 +250,20 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
 
             {/* Category Filter Tabs */}
             <div className="flex items-center gap-1.5 px-4 py-2 border-b border-slate-100 overflow-x-auto shrink-0 select-none">
-              {(["all", "metals", "grades", "calculations", "reports", "users"] as SearchCategory[]).map((tab) => (
+              {(["all", "metals", "grades", "calculations", "reports", "users"] as SearchCategory[])
+                .filter((tab) => {
+                  if (actor?.role !== "COSTING_DEPARTMENT") {
+                    return tab !== "metals" && tab !== "users";
+                  }
+                  return true;
+                })
+                .map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setCategory(tab)}
                   className={cn(
-                    "px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-lg border cursor-pointer transition-all",
+                    "px-2.5 py-1 text-[9px] font-black uppercase tracking-wider rounded-sm border cursor-pointer transition-all",
                     category === tab
                       ? "bg-[#edf5ff] border-[#bfd6f5] text-[#0057b8]"
                       : "bg-white border-[#d6dfeb] text-[#56657a] hover:bg-slate-50"
@@ -262,9 +277,19 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
             {/* Content Results Area */}
             <div className="max-h-[360px] overflow-y-auto p-2 flex flex-col gap-0.5 scrollbar-thin select-none min-h-[160px]">
               {isLoading && (
-                <div className="flex flex-col items-center justify-center p-8 gap-2.5 animate-pulse text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-                  <Compass className="size-6 text-[#0057b8] animate-spin" />
-                  <span>Scanning index files...</span>
+                <div className="p-2 space-y-3">
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-2 rounded border border-slate-100 bg-white animate-pulse">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div className="size-6 bg-slate-200 rounded" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-3 w-1/3 bg-slate-200 rounded" />
+                          <div className="h-2 w-1/2 bg-slate-150 rounded" />
+                        </div>
+                      </div>
+                      <div className="h-4 w-12 bg-slate-100 rounded" />
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -297,7 +322,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                         <div
                           key={idx}
                           onClick={() => setQuery(item)}
-                          className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-[#d6dfeb]/60"
+                          className="flex items-center justify-between p-2 rounded-sm hover:bg-slate-50 cursor-pointer transition-colors border border-transparent hover:border-[#d6dfeb]/60"
                         >
                           <span className="text-xs font-semibold text-[#10233d]">{item}</span>
                           <button
@@ -336,14 +361,14 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                       onClick={item.onClick}
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={cn(
-                        "flex items-center justify-between p-2.5 rounded-xl border cursor-pointer transition-all gap-4 text-left",
+                        "flex items-center justify-between p-2.5 rounded-sm border cursor-pointer transition-all gap-4 text-left",
                         isSelected
                           ? "bg-[#edf5ff]/55 border-[#0057b8] shadow-xs"
                           : "bg-white border-transparent hover:bg-slate-50/70"
                       )}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="size-8 bg-slate-50 border border-slate-100 flex items-center justify-center rounded-lg shrink-0">
+                        <div className="size-8 bg-slate-50 border border-slate-100 flex items-center justify-center rounded-sm shrink-0">
                           {getIcon(item.category)}
                         </div>
                         <div className="flex flex-col gap-0.5">

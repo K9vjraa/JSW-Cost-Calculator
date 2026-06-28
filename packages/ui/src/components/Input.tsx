@@ -33,7 +33,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type={type}
             disabled={disabled}
             className={cn(
-              "h-9.5 w-full rounded-lg border border-[#d6dfeb] bg-white text-xs font-bold text-[#10233d] transition-all focus:border-[#0057b8] focus:ring-1 focus:ring-[#0057b8] focus:outline-none placeholder:text-slate-400 placeholder:font-normal disabled:bg-slate-50 disabled:opacity-60",
+              "h-9.5 w-full rounded-lg border border-[#d6dfeb] bg-white text-xs font-bold text-[#10233d] transition-all focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none placeholder:text-slate-400 placeholder:font-normal disabled:bg-slate-50 disabled:opacity-60",
               leftIcon ? "pl-9.5" : "pl-3",
               rightIcon ? "pr-9.5" : "pr-3",
               error ? "border-[#d63031] focus:border-[#d63031] focus:ring-[#d63031]" : "",
@@ -86,7 +86,7 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             disabled={disabled}
             className={cn(
-              "h-9.5 w-full rounded-lg border border-[#d6dfeb] bg-white px-3 text-xs font-bold text-[#10233d] transition-all focus:border-[#0057b8] focus:ring-1 focus:ring-[#0057b8] focus:outline-none disabled:bg-slate-50 disabled:opacity-60 appearance-none pr-8 cursor-pointer",
+              "h-9.5 w-full rounded-lg border border-[#d6dfeb] bg-white px-3 text-xs font-bold text-[#10233d] transition-all focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none disabled:bg-slate-50 disabled:opacity-60 appearance-none pr-8 cursor-pointer",
               error ? "border-[#d63031] focus:border-[#d63031] focus:ring-[#d63031]" : "",
               className
             )}

@@ -6,7 +6,7 @@ import { Info, CheckCircle2, AlertTriangle, AlertCircle, X } from "lucide-react"
 export interface AlertBannerProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "info" | "success" | "warning" | "danger";
   title: string;
-  description: string;
+  description: React.ReactNode;
   isDismissible?: boolean;
   onDismiss?: () => void;
   action?: React.ReactNode;

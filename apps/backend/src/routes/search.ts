@@ -64,12 +64,11 @@ searchRoutes.get("/", asyncRoute(async (req, res) => {
       where: {
         OR: [
           { name: { contains: query, mode: "insensitive" } },
-          { email: { contains: query, mode: "insensitive" } },
-          { department: { contains: query, mode: "insensitive" } }
+          { email: { contains: query, mode: "insensitive" } }
         ]
       },
       take: limit,
-      select: { id: true, name: true, email: true, department: true, status: true }
+      select: { id: true, name: true, email: true, department: true }
     })
   ]);
 

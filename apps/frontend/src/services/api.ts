@@ -2,6 +2,7 @@ import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from "axio
 import type { Actor } from "@/types";
 import { toast } from "sonner";
 import { logger } from "../utils/logger";
+import { useAuthStore } from "../store/authStore";
 
 // ── Axios instance ────────────────────────────────────────────────────────────
 export const api: AxiosInstance = axios.create({
@@ -10,7 +11,7 @@ export const api: AxiosInstance = axios.create({
 });
 
 // ── Access token in-memory store ──────────────────────────────────────────────
-let accessToken: string | null = sessionStorage.getItem("mcms-access-token");
+let accessToken: string | null = localStorage.getItem("mcms-access-token");
 
 export function getAccessToken() {
   return accessToken;
@@ -18,8 +19,22 @@ export function getAccessToken() {
 
 export function setAccessToken(token?: string) {
   accessToken = token ?? null;
-  if (token) sessionStorage.setItem("mcms-access-token", token);
-  else sessionStorage.removeItem("mcms-access-token");
+  if (token) {
+    localStorage.setItem("mcms-access-token", token);
+    console.log("[TRACE] Token Saved to localStorage");
+  } else {
+    localStorage.removeItem("mcms-access-token");
+    console.log("[TRACE] Token Removed from localStorage");
+  }
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem("mcms-refresh-token");
+}
+
+export function setRefreshToken(token?: string) {
+  if (token) localStorage.setItem("mcms-refresh-token", token);
+  else localStorage.removeItem("mcms-refresh-token");
 }
 
 // ── Request interceptor: attach Bearer token ──────────────────────────────────
@@ -63,22 +78,34 @@ api.interceptors.response.use(
         });
       }
 
+      const rToken = getRefreshToken();
+      if (!rToken) {
+        console.warn("[TRACE] Refresh token missing from localStorage. Direct logout.");
+        setAccessToken();
+        setRefreshToken();
+        useAuthStore.getState().logout();
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
       isRefreshing = true;
 
       try {
-        const { data } = await api.post<{ accessToken: string; user: Actor }>("/auth/refresh");
+        const { data } = await api.post<{ accessToken: string; refreshToken?: string; user: Actor }>("/auth/refresh", { refreshToken: rToken });
         setAccessToken(data.accessToken);
+        if (data.refreshToken) setRefreshToken(data.refreshToken);
         processQueue(null, data.accessToken);
         originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
         return api(originalRequest);
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         setAccessToken();
-        // Redirect to login if refresh fails
-        if (window.location.pathname !== "/login") {
-          window.location.href = "/login";
-        }
+        setRefreshToken();
+        console.warn("[TRACE] Logout Trigger: API 401 response interceptor. Redirecting to login...");
+
+        // Centralized auth logout flow
+        useAuthStore.getState().logout();
+        
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
@@ -92,55 +119,22 @@ api.interceptors.response.use(
       message: error.message
     });
 
-    if (error.response?.status === 403) {
-      toast.error("Security Clearance: Your current role does not have authorization to perform this action.", { id: "erp-unauthorized-alert" });
-    } else if (!error.response) {
-      toast.error("ERP Network Disconnected: Unable to reach costing server. Retrying connection...", { id: "erp-connection-alert" });
-    } else if (error.response?.status >= 500) {
-      toast.error("ERP Internal Server Error: JSW Cost Database is temporarily busy. Attempting automatic recovery...", { id: "erp-server-alert" });
+    // Skip error toasts for endpoints that handle their own fallbacks (e.g. dashboards)
+    const skipToast = originalRequest.url?.includes("/health") || originalRequest.url?.includes("/dashboard");
+
+    if (!skipToast) {
+      if (error.response?.status === 403) {
+        toast.error("Security Clearance: Your current role does not have authorization to perform this action.", { id: "erp-unauthorized-alert" });
+      } else if (!error.response) {
+        toast.error("ERP Network Disconnected: Unable to reach costing server. Retrying connection...", { id: "erp-connection-alert" });
+      } else if (error.response?.status >= 500) {
+        toast.error("ERP Internal Server Error: JSW Cost Database is temporarily busy. Attempting automatic recovery...", { id: "erp-server-alert" });
+      }
     }
 
     return Promise.reject(error);
   }
 );
-
-// ── Auth helpers ──────────────────────────────────────────────────────────────
-
-const roleFromEmail = (email: string): Actor["role"] => {
-  if (email.includes("admin") || email.includes("cost")) return "COSTING_DEPARTMENT";
-  return "PDQC";
-};
-
-export async function login(email: string, password: string, rememberMe?: boolean): Promise<Actor> {
-  try {
-    const { data } = await api.post<{ accessToken: string; user: Actor }>("/auth/login", { email, password, rememberMe });
-    setAccessToken(data.accessToken);
-    return data.user;
-  } catch (err) {
-    if (!import.meta.env.DEV) throw err;
-    // Offline dev fallback
-    const role = roleFromEmail(email);
-    const actor: Actor = {
-      id: `demo-${role.toLowerCase()}`,
-      email,
-      role,
-      name: role === "COSTING_DEPARTMENT" ? "Costing Admin" : "PDQC Specialist",
-      department: role === "COSTING_DEPARTMENT" ? "Costing" : "PDQC"
-    };
-    setAccessToken("demo-offline-token");
-    return actor;
-  }
-}
-
-export async function logout(): Promise<void> {
-  try {
-    await api.post("/auth/logout");
-  } catch {
-    // Ignore logout errors — always clear local state
-  } finally {
-    setAccessToken();
-  }
-}
 
 // ── Generic helpers ───────────────────────────────────────────────────────────
 

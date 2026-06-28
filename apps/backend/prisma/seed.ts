@@ -10,12 +10,14 @@
 import { PrismaClient, CalculationStatus, NotificationPriority } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+import { Pool } from "pg";
+import { PrismaPg } from "@prisma/adapter-pg";
 // ── Pre-process Database URL dynamically ─────────────────────────────────────
 const dbHost = process.env.DB_HOST || "localhost";
 const dbPort = process.env.DB_PORT || "5432";
 const dbUser = process.env.DB_USER || "postgres";
 const dbPass = process.env.DB_PASSWORD || "admin123";
-const dbName = process.env.DB_NAME || "mcms";
+const dbName = process.env.DB_NAME || "mcms_db";
 
 let dbUrl = process.env.DATABASE_URL;
 if (!dbUrl || dbUrl.includes("${") || dbUrl.includes("$(")) {
@@ -23,7 +25,9 @@ if (!dbUrl || dbUrl.includes("${") || dbUrl.includes("$(")) {
   process.env.DATABASE_URL = dbUrl;
 }
 
-const prisma = new PrismaClient();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 // Utility helper to generate past dates
 function daysAgo(n: number): Date {
@@ -79,103 +83,51 @@ async function main() {
   await prisma.auditLog.deleteMany({});
   await prisma.notification.deleteMany({});
   await prisma.report.deleteMany({});
-  await prisma.comparisonRecord.deleteMany({});
+  await prisma.comparisonExport.deleteMany({});
   await prisma.calculationItem.deleteMany({});
   await prisma.calculation.deleteMany({});
-  await prisma.alloyComponent.deleteMany({});
-  await prisma.alloy.deleteMany({});
+  await prisma.gradeMaterial.deleteMany({});
+  await prisma.grade.deleteMany({});
   await prisma.priceHistory.deleteMany({});
   await prisma.priceList.deleteMany({});
-  await prisma.mechanicalProperty.deleteMany({});
-  await prisma.chemicalProperty.deleteMany({});
-  await prisma.grade.deleteMany({});
   await prisma.metal.deleteMany({});
   await prisma.rawMaterial.deleteMany({});
   await prisma.supplier.deleteMany({});
   await prisma.gstSlab.deleteMany({});
   await prisma.systemSetting.deleteMany({});
   await prisma.jswProductCatalog.deleteMany({});
-  await prisma.refreshToken.deleteMany({});
+  await prisma.comparisonSession.deleteMany({});
   await prisma.user.deleteMany({});
-  await prisma.role.deleteMany({});
-  console.log("   ✓ All tables cleared.\n");
+  console.log("   ✓ User profiles cleared.\n");
 
   // ══════════════════════════════════════════════════════════════════════════
-  // STEP 1 — Roles
+  // STEP 2 — User Profiles (Demo Accounts)
   // ══════════════════════════════════════════════════════════════════════════
-  console.log("🔐  Seeding user roles...");
-  const roleNames = ["SUPER_ADMIN", "ADMIN", "EMPLOYEE", "USER"];
-  const roleRows = await Promise.all(
-    roleNames.map((name) =>
-      prisma.role.create({
-        data: {
-          name,
-          description: `${name} role for JSW costing boundaries.`
-        }
-      })
-    )
-  );
-  const roles = Object.fromEntries(roleRows.map((r) => [r.name, r]));
-  console.log(`   ✓ ${roleRows.length} roles created.\n`);
+  console.log("👤  Seeding JSW enterprise profiles...");
+  const adminProfile = await prisma.user.create({
+    data: {
+      id: "9383886f-1438-4f46-81e7-ad77a7fa0450",
+      name: "Costing Admin",
+      email: "admin@jsw-mcms.local",
+      role: "COSTING_DEPARTMENT",
+      department: "COSTING",
+      passwordHash: await bcrypt.hash("MCMS@2026", 10)
+    }
+  });
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // STEP 2 — Users (Exactly 25 users across 5 departments)
-  // ══════════════════════════════════════════════════════════════════════════
-  console.log("👤  Generating 25 JSW enterprise users...");
-  const passwordHash = await bcrypt.hash("MCMS@2026", 10);
+  const pdqcProfile = await prisma.user.create({
+    data: {
+      id: "04d9b76c-b7d9-4e71-a329-20bd6baade11",
+      name: "PDQC Specialist",
+      email: "pdqc@jsw-mcms.local",
+      role: "PDQC",
+      department: "PDQC",
+      passwordHash: await bcrypt.hash("MCMS@2026", 10)
+    }
+  });
 
-  const userDefinitions = [
-    // Presentation demo accounts
-    { name: "Admin User", email: "admin@jsw-mcms.local", role: "ADMIN", dept: "IT Administration" },
-    { name: "Employee User", email: "employee@jsw-mcms.local", role: "EMPLOYEE", dept: "Cost Engineering" },
-    { name: "Standard User", email: "user@jsw-mcms.local", role: "USER", dept: "Client Services" },
-    // 1 SUPER_ADMIN
-    { name: "Sajjan Jindal", email: "superadmin@jsw.in", role: "SUPER_ADMIN", dept: "Operations" },
-    // 3 ADMIN
-    { name: "Demo Admin", email: "demo.admin@jsw.in", role: "ADMIN", dept: "Operations" },
-    { name: "Amit Banerjee", email: "amit.banerjee@jsw.in", role: "ADMIN", dept: "Finance" },
-    { name: "Sunita Reddy", email: "sunita.reddy@jsw.in", role: "ADMIN", dept: "Procurement" },
-    // 6 EMPLOYEE
-    { name: "Arjun Mehta", email: "arjun.mehta@jsw.in", role: "EMPLOYEE", dept: "Procurement" },
-    { name: "Priya Nair", email: "priya.nair@jsw.in", role: "EMPLOYEE", dept: "Production" },
-    { name: "Suresh Iyer", email: "suresh.iyer@jsw.in", role: "EMPLOYEE", dept: "Finance" },
-    { name: "Rahul Sharma", email: "rahul.sharma@jsw.in", role: "EMPLOYEE", dept: "Quality" },
-    { name: "Kiran Joshi", email: "kiran.joshi@jsw.in", role: "EMPLOYEE", dept: "Operations" },
-    { name: "Vikas Sen", email: "vikas.sen@jsw.in", role: "EMPLOYEE", dept: "Procurement" },
-    // 15 USER
-    { name: "Rajesh Kumar", email: "user1@jsw.in", role: "USER", dept: "Production" },
-    { name: "Neha Gupta", email: "user2@jsw.in", role: "USER", dept: "Procurement" },
-    { name: "Sanjay Shah", email: "user3@jsw.in", role: "USER", dept: "Operations" },
-    { name: "Aditi Rao", email: "user4@jsw.in", role: "USER", dept: "Quality" },
-    { name: "Manoj Tiwari", email: "user5@jsw.in", role: "USER", dept: "Finance" },
-    { name: "Pooja Patel", email: "user6@jsw.in", role: "USER", dept: "Production" },
-    { name: "Rohan Varma", email: "user7@jsw.in", role: "USER", dept: "Procurement" },
-    { name: "Divya Mishra", email: "user8@jsw.in", role: "USER", dept: "Operations" },
-    { name: "Anil Kapoor", email: "user9@jsw.in", role: "USER", dept: "Quality" },
-    { name: "Swati Deshmukh", email: "user10@jsw.in", role: "USER", dept: "Finance" },
-    { name: "Vijay Mallya", email: "user11@jsw.in", role: "USER", dept: "Production" },
-    { name: "Karan Johar", email: "user12@jsw.in", role: "USER", dept: "Procurement" },
-    { name: "Gaurav Chopra", email: "user13@jsw.in", role: "USER", dept: "Operations" },
-    { name: "Preeti Zinta", email: "user14@jsw.in", role: "USER", dept: "Quality" },
-    { name: "Aamir Khan", email: "user15@jsw.in", role: "USER", dept: "Finance" }
-  ];
-
-  const userRows = await Promise.all(
-    userDefinitions.map((ud) =>
-      prisma.user.create({
-        data: {
-          name: ud.name,
-          email: ud.email,
-          passwordHash,
-          department: ud.dept,
-          status: "ACTIVE",
-          roleId: roles[ud.role].id,
-          lastLoginAt: daysAgo(Math.floor(randomRange(1, 10)))
-        }
-      })
-    )
-  );
-  console.log(`   ✓ ${userRows.length} users seeded.\n`);
+  const userRows = [adminProfile, pdqcProfile];
+  console.log(`   ✓ ${userRows.length} user profiles seeded.\n`);
 
   // ══════════════════════════════════════════════════════════════════════════
   // STEP 3 — Suppliers
@@ -406,11 +358,12 @@ async function main() {
     rawMaterialSpecs.map((spec) =>
       prisma.rawMaterial.create({
         data: {
-          name: spec.name,
-          code: spec.code,
-          unit: "kg",
-          status: "ACTIVE",
-          description: `Base industrial input element ${spec.name}`
+          materialName: spec.name,
+          materialCode: spec.code,
+          description: `Base industrial input element ${spec.name}`,
+          availability: true,
+          isMicro: spec.code.includes("-NB") || spec.code.includes("-V"),
+          currentRate: spec.price
         }
       })
     )
@@ -422,7 +375,7 @@ async function main() {
       prisma.priceList.create({
         data: {
           rawMaterialId: rm.id,
-          pricePerUnit: rawMaterialSpecs[idx].price.toFixed(4),
+          pricePerUnit: rawMaterialSpecs[idx].price,
           currency: "INR",
           unit: "kg",
           source: "JSW-RAW-VALUATION-2026",
@@ -440,7 +393,7 @@ async function main() {
   // STEP 7 — Price History (Exactly 200 historical changes spread over 12 months)
   // ══════════════════════════════════════════════════════════════════════════
   console.log("📈  Generating 200 historical price fluctuations (last 12 months)...");
-  const priceHistoryCreators = userRows.filter((u) => u.email.endsWith("admin@jsw.in") || u.email.includes("arjun"));
+  const priceHistoryCreators = userRows.filter((u) => u.role === "COSTING_DEPARTMENT");
   const priceHistoryData: any[] = [];
 
   for (let i = 0; i < 200; i++) {
@@ -535,9 +488,9 @@ async function main() {
 
       // Add a couple of raw material elements as alloys
       const rm1 = pickRandom(rawRows);
-      const rmUnitPrice = rawMaterialSpecs.find((spec) => spec.code === rm1.code)!.price;
+      const rm1UnitPrice = rawMaterialSpecs.find((spec) => spec.name === rm1.materialName)!.price;
       const rm1Qty = quantity * 0.10; // 10% scrap/flux
-      const rm1BaseCost = rm1Qty * rmUnitPrice;
+      const rm1BaseCost = rm1Qty * rm1UnitPrice;
 
       const baseCostVal = mainItemBaseCost + rm1BaseCost;
 
@@ -599,7 +552,7 @@ async function main() {
         ]
       };
 
-      const approver = pickRandom(userRows.filter((u) => u.roleId === roles["ADMIN"].id || u.roleId === roles["SUPER_ADMIN"].id));
+      const approver = pickRandom(userRows.filter((u) => u.role === "COSTING_DEPARTMENT"));
 
       await prisma.calculation.create({
         data: {
@@ -627,22 +580,16 @@ async function main() {
                 itemName: `${metal.name} (${grade.name})`,
                 quantity: finalQty.toFixed(4),
                 compositionPct: "90.0000",
-                unitPrice: itemUnitPrice.toFixed(4),
                 gradeMultiplier: multiplier.toFixed(4),
-                extraPrice: additionalCost.toFixed(2),
-                baseCost: mainItemBaseCost.toFixed(4),
                 snapshot: { basePrice: metalBaseRate.toFixed(4), multiplier: multiplier.toFixed(4) }
               },
               {
                 rawMaterialId: rm1.id,
-                itemName: `${rm1.name} Composition Additive`,
+                itemName: `${rm1.materialName} Composition Additive`,
                 quantity: (finalQty * 0.10).toFixed(4),
                 compositionPct: "10.0000",
-                unitPrice: rmUnitPrice.toFixed(4),
                 gradeMultiplier: "1.0000",
-                extraPrice: "0.00",
-                baseCost: rm1BaseCost.toFixed(4),
-                snapshot: { basePrice: rmUnitPrice.toFixed(4) }
+                snapshot: { basePrice: rm1UnitPrice.toFixed(4) }
               }
             ]
           }
@@ -817,11 +764,16 @@ async function main() {
       pickRandom(gradeRows).id
     ];
 
-    await prisma.comparisonRecord.create({
+    await prisma.comparisonSession.create({
       data: {
         name: template.name,
-        gradeIds: selectedGrades,
-        userId: pickRandom(userRows).id
+        createdById: pickRandom(userRows).id,
+        items: {
+          create: selectedGrades.map((gradeId, index) => ({
+            gradeId,
+            position: index
+          }))
+        }
       }
     });
   }
@@ -898,7 +850,7 @@ async function main() {
   console.log("   SUPER ADMIN: superadmin@jsw.in  / MCMS@2026");
   console.log("   ADMIN    : admin@jsw-mcms.local  / MCMS@2026");
   console.log("   EMPLOYEE : employee@jsw-mcms.local  / MCMS@2026");
-  console.log("   USER     : user@jsw-mcms.local  / MCMS@2026\n");
+  console.log("   PDQC     : pdqc@jsw-mcms.local  / MCMS@2026\n");
 }
 
 main()

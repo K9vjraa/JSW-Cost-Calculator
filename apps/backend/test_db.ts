@@ -18,8 +18,8 @@ async function main() {
     try {
       await prisma.$connect();
       console.log("🟢 Connection SUCCESS!");
-      const usersCount = await prisma.user.count();
-      console.log(`   Found ${usersCount} users in database.`);
+      const users = await prisma.user.findMany();
+      console.log("Users:", users.map(u => ({ email: u.email, department: u.department, role: u.role })));
       await prisma.$disconnect();
       return;
     } catch (e: any) {

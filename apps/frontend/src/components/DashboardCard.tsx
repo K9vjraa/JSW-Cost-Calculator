@@ -38,9 +38,9 @@ export function DashboardCard({
       <CardContent className="p-5 flex-1 flex flex-col">
         {loading ? (
           <div className="flex-1 flex flex-col gap-3 py-2">
-            <Skeleton className="h-4 w-2/3 rounded-lg" />
-            <Skeleton className="h-24 w-full rounded-xl" />
-            <Skeleton className="h-4 w-1/2 rounded-lg" />
+            <Skeleton className="h-4 w-2/3 rounded-sm" />
+            <Skeleton className="h-24 w-full rounded-sm" />
+            <Skeleton className="h-4 w-1/2 rounded-sm" />
           </div>
         ) : (
           children

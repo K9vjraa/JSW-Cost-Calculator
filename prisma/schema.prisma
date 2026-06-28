@@ -3,9 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
 }
 
 enum CalculationStatus {
@@ -22,54 +20,47 @@ enum NotificationPriority {
   HIGH
 }
 
-model Role {
-  id          String   @id @default(uuid())
-  name        String   @unique
-  description String?
-  users       User[]
-  createdAt   DateTime @default(now())
+enum DepartmentType {
+  COSTING
+  PDQC
 }
 
 model User {
-  id                   String             @id @default(uuid())
-  name                 String
-  email                String             @unique
-  passwordHash         String
-  department           String?
-  status               String             @default("ACTIVE")
-  failedLoginCount     Int                @default(0)
-  lockedUntil          DateTime?
-  lastLoginAt          DateTime?
-  roleId               String
-  role                 Role               @relation(fields: [roleId], references: [id])
-  refreshTokens        RefreshToken[]
-  alloys               Alloy[]
-  calculations         Calculation[]
-  auditLogs            AuditLog[]
-  notifications        Notification[]
-  reports              Report[]
-  priceHistoryEvents   PriceHistory[]
-  comparisonRecords    ComparisonRecord[]
-  approvedCalculations Calculation[]      @relation("ApprovedCalculations")
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
+  id                         String                @id @db.Uuid
+  name                       String                @map("full_name")
+  email                      String                @unique
+  department                 DepartmentType?
+  passwordHash               String?
+  status                     String                @default("ACTIVE")
+  role                       String
+  alloys                     Alloy[]
+  calculations               Calculation[]
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  reports                    Report[]
+  priceHistoryEvents         PriceHistory[]
+  approvedCalculations       Calculation[]         @relation("ApprovedCalculations")
+  createdAt                  DateTime              @default(now()) @map("created_at")
+  updatedAt                  DateTime              @updatedAt @map("updated_at")
+  rawMaterials               RawMaterial[]
+  createdGrades              Grade[]               @relation("CreatedGrades")
+  updatedGrades              Grade[]               @relation("UpdatedGrades")
+  approvedGrades             Grade[]               @relation("ApprovedGrades")
+  gradeVersionsCreated       GradeVersion[]        @relation("CreatedGradeVersions")
+  gradeVersionsApproved      GradeVersion[]        @relation("ApprovedGradeVersions")
+  gradeHistories             GradeHistory[]
+  gradeValidationLogs        GradeValidationLog[]
+  createdComparisonSessions  ComparisonSession[]   @relation("CreatedComparisonSessions")
+  updatedComparisonSessions  ComparisonSession[]   @relation("UpdatedComparisonSessions")
+  createdComparisonSnapshots ComparisonSnapshot[]  @relation("CreatedComparisonSnapshots")
+  createdComparisonNotes     ComparisonNote[]      @relation("CreatedComparisonNotes")
+  updatedComparisonNotes     ComparisonNote[]      @relation("UpdatedComparisonNotes")
+  comparisonHistories        ComparisonHistory[]   @relation("PerformedComparisonHistories")
+  comparisonExports          ComparisonExport[]    @relation("ExportedComparisonExports")
+  comparisonPreference       ComparisonPreference?
 
-  @@index([roleId])
-  @@index([status])
   @@index([createdAt])
-}
-
-model RefreshToken {
-  id             String    @id @default(uuid())
-  tokenHash      String    @unique
-  userId         String
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt      DateTime
-  revokedAt      DateTime?
-  replacedByHash String?
-  createdAt      DateTime  @default(now())
-
-  @@index([userId, expiresAt])
+  @@map("profiles")
 }
 
 model Metal {
@@ -94,47 +85,69 @@ model Metal {
 }
 
 model Grade {
-  id                   String              @id @default(uuid())
+  id                   String               @id @default(uuid())
   metalId              String
-  metal                Metal               @relation(fields: [metalId], references: [id], onDelete: Cascade)
+  metal                Metal                @relation(fields: [metalId], references: [id], onDelete: Cascade)
+  code                 String?              @unique
   name                 String
   subGrade             String?
-  multiplier           Decimal             @db.Decimal(10, 4)
-  extraPrice           Decimal             @default(0) @db.Decimal(14, 2)
+  category             String?
+  steelType            String?
+  targetBatchQty       Int?
+  description          String?
+  version              Int                  @default(1)
+  status               String               @default("DRAFT")
+  submittedAt          DateTime?
+  approvedAt           DateTime?
+  approvedById         String?              @db.Uuid
+  approvedBy           User?                @relation("ApprovedGrades", fields: [approvedById], references: [id])
+  publishedAt          DateTime?
+  createdById          String               @db.Uuid
+  createdBy            User                 @relation("CreatedGrades", fields: [createdById], references: [id])
+  updatedById          String               @db.Uuid
+  updatedBy            User                 @relation("UpdatedGrades", fields: [updatedById], references: [id])
+  multiplier           Decimal              @db.Decimal(10, 4)
+  extraPrice           Decimal              @default(0) @db.Decimal(14, 2)
   mechanicalProperties Json
   toleranceProperties  Json
   bendProperties       Json
   chemicalComposition  Json
-  status               String              @default("ACTIVE")
   alloyComponents      AlloyComponent[]
   calculationItems     CalculationItem[]
   mechanicalProperty   MechanicalProperty?
   chemicalProperty     ChemicalProperty?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  gradeMaterials       GradeMaterial[]
+  gradeVersions        GradeVersion[]
+  gradeHistories       GradeHistory[]
+  gradeValidationLogs  GradeValidationLog[]
+  comparisonItems      ComparisonItem[]
 
   @@unique([metalId, name, subGrade])
   @@index([metalId, status])
   @@index([name])
   @@index([status])
-  @@index([createdAt])
 }
 
 model RawMaterial {
   id               String            @id @default(uuid())
-  name             String
-  code             String            @unique
-  unit             String            @default("kg")
-  status           String            @default("ACTIVE")
-  description      String?
+  rawMatId         Int               @unique @default(autoincrement()) @map("RAW_MAT_ID")
+  alloyName        String            @map("ALLOY_NAME")
+  alloyDescription String?           @map("ALLOY_DESCRIPTION")
+  isAvail          Boolean           @default(true) @map("IS_AVAIL")
+  isMicro          Boolean           @default(false) @map("IS_MICRO")
+  currentRate      Decimal           @default(0) @map("CURRENT_RATE") @db.Decimal(16, 4)
+  updatedById      String?           @map("UPDATED_BY_ID") @db.Uuid
+  updatedBy        User?             @relation(fields: [updatedById], references: [id])
   prices           PriceList[]
   priceHistory     PriceHistory[]
   alloyComponents  AlloyComponent[]
   calculationItems CalculationItem[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  createdAt        DateTime          @default(now()) @map("CREATED_AT")
+  updatedAt        DateTime          @updatedAt @map("UPDATED_AT")
+  gradeMaterials   GradeMaterial[]
 
-  @@index([name, status])
+  @@index([alloyName, isAvail])
+  @@map("ferro_alloy_master")
 }
 
 model Alloy {
@@ -142,7 +155,7 @@ model Alloy {
   name         String
   code         String           @unique
   type         String
-  createdById  String?
+  createdById  String?          @db.Uuid
   createdBy    User?            @relation(fields: [createdById], references: [id])
   components   AlloyComponent[]
   calculations Calculation[]
@@ -217,7 +230,7 @@ model PriceHistory {
   rawMaterial   RawMaterial? @relation(fields: [rawMaterialId], references: [id])
   oldPrice      Decimal?     @db.Decimal(16, 4)
   newPrice      Decimal      @db.Decimal(16, 4)
-  updatedById   String
+  updatedById   String       @db.Uuid
   updatedBy     User         @relation(fields: [updatedById], references: [id])
   reason        String?
   updatedAt     DateTime     @default(now())
@@ -231,7 +244,7 @@ model Calculation {
   batchId        String            @unique
   mode           String
   name           String
-  userId         String
+  userId         String            @db.Uuid
   user           User              @relation(fields: [userId], references: [id])
   alloyId        String?
   alloy          Alloy?            @relation(fields: [alloyId], references: [id])
@@ -246,7 +259,7 @@ model Calculation {
   updatedAt      DateTime          @updatedAt
   completedAt    DateTime?
   oldCost        Decimal?          @db.Decimal(18, 4)
-  approvedById   String?
+  approvedById   String?           @db.Uuid
   approvedBy     User?             @relation("ApprovedCalculations", fields: [approvedById], references: [id])
   approvedAt     DateTime?
   approvalReason String?
@@ -282,7 +295,7 @@ model CalculationItem {
 
 model AuditLog {
   id        String   @id @default(uuid())
-  userId    String?
+  userId    String?  @db.Uuid
   user      User?    @relation(fields: [userId], references: [id])
   action    String
   entity    String
@@ -298,7 +311,7 @@ model AuditLog {
 
 model Notification {
   id        String               @id @default(uuid())
-  userId    String?
+  userId    String?              @db.Uuid
   user      User?                @relation(fields: [userId], references: [id])
   title     String
   message   String
@@ -317,7 +330,7 @@ model Report {
   name          String
   type          String
   filters       Json
-  generatedById String
+  generatedById String   @db.Uuid
   generatedBy   User     @relation(fields: [generatedById], references: [id])
   calculationId String?
   createdAt     DateTime @default(now())
@@ -391,14 +404,131 @@ model ChemicalProperty {
   updatedAt  DateTime @updatedAt
 }
 
-model ComparisonRecord {
-  id        String   @id @default(uuid())
-  name      String
-  gradeIds  Json
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+model ComparisonSession {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  status      String    @default("ACTIVE")
+  createdById String?   @db.Uuid
+  createdBy   User?     @relation("CreatedComparisonSessions", fields: [createdById], references: [id])
+  updatedById String?   @db.Uuid
+  updatedBy   User?     @relation("UpdatedComparisonSessions", fields: [updatedById], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  items     ComparisonItem[]
+  results   ComparisonResult[]
+  snapshots ComparisonSnapshot[]
+  notes     ComparisonNote[]
+  histories ComparisonHistory[]
+  exports   ComparisonExport[]
+
+  @@index([createdById, status])
+  @@index([createdAt])
+  @@map("comparison_sessions")
+}
+
+model ComparisonItem {
+  id                  String            @id @default(uuid())
+  comparisonSessionId String
+  comparisonSession   ComparisonSession @relation(fields: [comparisonSessionId], references: [id], onDelete: Cascade)
+  gradeId             String
+  grade               Grade             @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  position            Int               @default(0)
+  colorCode           String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+
+  @@index([comparisonSessionId])
+  @@index([gradeId])
+  @@map("comparison_items")
+}
+
+model ComparisonResult {
+  id                  String            @id @default(uuid())
+  comparisonSessionId String
+  comparisonSession   ComparisonSession @relation(fields: [comparisonSessionId], references: [id], onDelete: Cascade)
+  metricsJson         Json
+  costDifference      Decimal?          @db.Decimal(18, 4)
+  varianceJson        Json?
+  calculatedAt        DateTime          @default(now())
+
+  @@index([comparisonSessionId])
+  @@map("comparison_results")
+}
+
+model ComparisonSnapshot {
+  id                  String            @id @default(uuid())
+  comparisonSessionId String
+  comparisonSession   ComparisonSession @relation(fields: [comparisonSessionId], references: [id], onDelete: Cascade)
+  snapshotData        Json
+  version             Int               @default(1)
+  createdById         String?           @db.Uuid
+  createdBy           User?             @relation("CreatedComparisonSnapshots", fields: [createdById], references: [id])
+  createdAt           DateTime          @default(now())
+
+  @@index([comparisonSessionId])
+  @@map("comparison_snapshots")
+}
+
+model ComparisonNote {
+  id                  String            @id @default(uuid())
+  comparisonSessionId String
+  comparisonSession   ComparisonSession @relation(fields: [comparisonSessionId], references: [id], onDelete: Cascade)
+  content             String            @db.Text
+  createdById         String?           @db.Uuid
+  createdBy           User?             @relation("CreatedComparisonNotes", fields: [createdById], references: [id])
+  updatedById         String?           @db.Uuid
+  updatedBy           User?             @relation("UpdatedComparisonNotes", fields: [updatedById], references: [id])
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  deletedAt           DateTime?
+
+  @@index([comparisonSessionId])
+  @@map("comparison_notes")
+}
+
+model ComparisonHistory {
+  id                  String            @id @default(uuid())
+  comparisonSessionId String
+  comparisonSession   ComparisonSession @relation(fields: [comparisonSessionId], references: [id], onDelete: Cascade)
+  action              String
+  details             Json?
+  performedById       String?           @db.Uuid
+  performedBy         User?             @relation("PerformedComparisonHistories", fields: [performedById], references: [id])
+  createdAt           DateTime          @default(now())
+
+  @@index([comparisonSessionId, createdAt])
+  @@map("comparison_history")
+}
+
+model ComparisonExport {
+  id                  String            @id @default(uuid())
+  comparisonSessionId String
+  comparisonSession   ComparisonSession @relation(fields: [comparisonSessionId], references: [id], onDelete: Cascade)
+  format              String
+  fileUrl             String
+  exportedById        String?           @db.Uuid
+  exportedBy          User?             @relation("ExportedComparisonExports", fields: [exportedById], references: [id])
+  createdAt           DateTime          @default(now())
+
+  @@index([comparisonSessionId])
+  @@map("comparison_exports")
+}
+
+model ComparisonPreference {
+  id             String   @id @default(uuid())
+  userId         String   @unique @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultMetrics Json?
+  viewMode       String   @default("TABLE")
+  theme          String   @default("LIGHT")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("comparison_preferences")
 }
 
 model JswProductCatalog {
@@ -413,4 +543,71 @@ model JswProductCatalog {
   updatedAt DateTime @updatedAt
 
   @@unique([category, steelType, grade, subGrade])
+}
+
+// ------------------------------------------------------------
+// Grade Builder additional models
+// ------------------------------------------------------------
+
+model GradeMaterial {
+  id                 String      @id @default(uuid())
+  gradeId            String
+  grade              Grade       @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  materialId         String
+  material           RawMaterial @relation(fields: [materialId], references: [id])
+  compositionPercent Decimal     @db.Decimal(7, 4)
+  quantityKg         Decimal?    @db.Decimal(16, 4)
+  sortOrder          Int?        @default(0)
+  remarks            String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+  status             String      @default("ACTIVE")
+
+  @@unique([gradeId, materialId])
+  @@index([gradeId])
+}
+
+model GradeVersion {
+  id           String   @id @default(uuid())
+  gradeId      String
+  grade        Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  version      Int
+  status       String   @default("DRAFT")
+  changeReason String?
+  createdById  String   @db.Uuid
+  createdBy    User     @relation("CreatedGradeVersions", fields: [createdById], references: [id])
+  approvedById String?  @db.Uuid
+  approvedBy   User?    @relation("ApprovedGradeVersions", fields: [approvedById], references: [id])
+  snapshotJson Json
+  createdAt    DateTime @default(now())
+
+  @@index([gradeId, version])
+}
+
+model GradeHistory {
+  id            String   @id @default(uuid())
+  gradeId       String
+  grade         Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  action        String
+  previousState Json
+  newState      Json
+  changedById   String   @db.Uuid
+  changedBy     User     @relation(fields: [changedById], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([gradeId, createdAt])
+}
+
+model GradeValidationLog {
+  id            String   @id @default(uuid())
+  gradeId       String
+  grade         Grade    @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  status        String
+  errors        Json?
+  validatedById String   @db.Uuid
+  validatedBy   User     @relation(fields: [validatedById], references: [id])
+  createdAt     DateTime @default(now())
+
+  @@index([gradeId, status])
 }

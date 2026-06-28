@@ -6,14 +6,12 @@ import {
   Users, 
   Activity, 
   ShieldCheck, 
-  Zap, 
   ArrowRight,
   TrendingUp,
-  FileSpreadsheet,
-  FileText,
   Sparkles
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 // Core design system imports
 import { 
@@ -36,12 +34,14 @@ import {
 } from "@jsw-mcms/ui";
 
 import { CalculationLine, DoughnutMetric, CostBars } from "@/components/Charts";
-import { adminDashboard, userDashboard } from "@/data/fixtures";
+import { ImportFerroAlloyExcel } from "@/components/ImportFerroAlloyExcel";
 import { useAuth } from "@/store/auth";
-import { useRemote } from "@/hooks/useRemote";
 import { shortDate } from "@/utils";
-import { getOrFixture } from "@/services/api";
+import { apiClient } from "@/services/api/client";
+import { useQuery } from "@tanstack/react-query";
 import type { Calculation } from "@/types";
+import { quickActionsConfig } from "@/config/navigation";
+import { RefreshCcw } from "lucide-react";
 
 /* ----------------------------------------------------
    DENSITY STATUS BADGE FORMATTER
@@ -79,10 +79,31 @@ function DashboardSkeleton() {
 }
 
 /* ----------------------------------------------------
+   ERROR STATE WRAPPER
+   ---------------------------------------------------- */
+function DashboardError({ retry }: { retry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-[50vh] w-full gap-4 bg-slate-50 border border-slate-200 rounded-sm">
+      <div className="size-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 mb-2">
+        <Activity className="size-6" />
+      </div>
+      <div className="text-center">
+        <h3 className="text-lg font-bold text-slate-900">Dashboard Failed to Load</h3>
+        <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">We couldn't connect to the costing server. This might be due to a network issue or server maintenance.</p>
+      </div>
+      <Button onClick={retry} variant="outline" leftIcon={<RefreshCcw className="size-4" />}>
+        Retry Connection
+      </Button>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------
    MAIN ENTRY PAGE COMPONENT
    ---------------------------------------------------- */
 export function DashboardPage() {
   const { actor } = useAuth();
+  console.log("[TRACE] DashboardPage Mounted: actor=", actor);
   return actor?.role === "COSTING_DEPARTMENT" ? <AdminDashboard /> : <UserDashboard />;
 }
 
@@ -90,12 +111,27 @@ export function DashboardPage() {
    1️⃣ PREMIUM ADMIN EXECUTIVE LEVEL DASHBOARD
    ---------------------------------------------------- */
 function AdminDashboard() {
-  const { data, loading } = useRemote(
-    () => getOrFixture("/dashboard/admin", adminDashboard), 
-    adminDashboard
-  );
+  const navigate = useNavigate();
+  const { data: rawData, isLoading, isError, refetch } = useQuery({
+    queryKey: ["admin-dashboard"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/dashboard/admin");
+      return data;
+    }
+  });
 
-  if (loading) return <DashboardSkeleton />;
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError) return <DashboardError retry={refetch} />;
+
+  const data = rawData || {};
+  const kpis = data?.kpis || {};
+  const series = data?.series || [];
+  const topAlloys = data?.topAlloys || [];
+  const statuses = data?.statuses || [];
+  const activity = data?.activity || [];
+  const recent = data?.recent || [];
+  const systemSummary = data?.systemSummary || {};
+  const notices = data?.notices || [];
 
   return (
     <motion.div 
@@ -125,37 +161,40 @@ function AdminDashboard() {
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <KPICard
           title="Calculations Saved"
-          value={data.kpis.calculations.toLocaleString("en-IN")}
+          value={(kpis.calculations ?? 0).toLocaleString("en-IN")}
           icon={<Calculator className="size-4.5" />}
           trend={{ value: "18.6% up", isPositive: true, label: "this month" }}
         />
         <KPICard
           title="Configured Alloys"
-          value={String(data.kpis.alloys)}
+          value={String(kpis.alloys ?? 0)}
           icon={<Layers3 className="size-4.5" />}
           trend={{ value: "12% up", isPositive: true, label: "catalog" }}
           isLocked
         />
         <KPICard
           title="Raw Ingredients"
-          value={String(data.kpis.rawMaterials)}
+          value={String(kpis.rawMaterials ?? 0)}
           icon={<PackagePlus className="size-4.5" />}
           trend={{ value: "Prices locked", isPositive: true, label: "master" }}
           isLocked
         />
         <KPICard
           title="Est. Billing Volume"
-          value={inr(data.kpis.estimatedValue)}
+          value={inr(kpis.estimatedValue ?? 0)}
           icon={<IndianRupee className="size-4.5" />}
           trend={{ value: "4.2% up", isPositive: true, label: "demand" }}
         />
         <KPICard
           title="Controlled Access Users"
-          value={String(data.kpis.activeUsers)}
+          value={String(kpis.activeUsers ?? 0)}
           icon={<Users className="size-4.5" />}
           trend={{ value: "Active", isPositive: true, label: "online" }}
         />
       </div>
+
+      {/* Admin Utility for Excel Import */}
+      <ImportFerroAlloyExcel />
 
       {/* Primary Graphs and Fast Action Panels */}
       <div className="grid gap-6 xl:grid-cols-[1.6fr_0.8fr]">
@@ -166,7 +205,7 @@ function AdminDashboard() {
           subtitle="Live calculation cost indices updated by price masters"
         >
           <div className="w-full h-56">
-            <CalculationLine points={data.series} />
+            <CalculationLine points={series} />
           </div>
         </ChartContainer>
 
@@ -177,33 +216,20 @@ function AdminDashboard() {
             <CardDescription>Procurement workflow actions trigger points</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col justify-center gap-3">
-            <Button 
-              className="w-full h-9"
-              leftIcon={<Calculator className="size-4" />}
-            >
-              Run Calculation Workspace
-            </Button>
-            <Button 
-              variant="secondary" 
-              className="w-full h-9 bg-slate-100 hover:bg-slate-200 text-slate-700"
-              leftIcon={<Layers3 className="size-4" />}
-            >
-              Add Alloy Recipe
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full h-9 border-slate-200 hover:bg-slate-50 text-slate-700"
-              leftIcon={<PackagePlus className="size-4" />}
-            >
-              Add Metal Grade
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full h-9 border-slate-200 hover:bg-slate-50 text-slate-700"
-              leftIcon={<Zap className="size-4" />}
-            >
-              Master Price Update
-            </Button>
+            {quickActionsConfig.COSTING.map((action, idx) => {
+              const Icon = action.icon;
+              return (
+                <Button 
+                  key={idx}
+                  variant={(action.variant as any) || "primary"} 
+                  className={`w-full h-9 ${action.variant === 'secondary' ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : action.variant === 'outline' ? 'border-slate-200 hover:bg-slate-50 text-slate-700' : ''}`}
+                  leftIcon={<Icon className="size-4" />}
+                  onClick={() => navigate(action.to)}
+                >
+                  {action.label}
+                </Button>
+              );
+            })}
           </CardContent>
         </Card>
       </div>
@@ -217,7 +243,7 @@ function AdminDashboard() {
           subtitle="Top active JSW metal recipes composition"
         >
           <div className="w-full">
-            <DoughnutMetric rows={data.topAlloys} center={String(data.kpis.alloys)} />
+            <DoughnutMetric rows={topAlloys} center={String(kpis.alloys ?? 0)} />
           </div>
         </ChartContainer>
 
@@ -227,7 +253,7 @@ function AdminDashboard() {
           subtitle="Completed vs draft calculations distribution"
         >
           <div className="w-full">
-            <DoughnutMetric rows={data.statuses} center={String(data.kpis.calculations)} />
+            <DoughnutMetric rows={statuses} center={String(kpis.calculations ?? 0)} />
           </div>
         </ChartContainer>
 
@@ -238,7 +264,9 @@ function AdminDashboard() {
             <CardDescription>Recent master audit actions logged</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2.5 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin">
-            {data.activity.map((entry) => (
+            {activity.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">No recent activity.</p>
+            ) : activity.map((entry: any) => (
               <div
                 key={entry.id}
                 className="flex items-start gap-3 border border-slate-200 p-2.5 rounded text-xs bg-white hover:bg-slate-50 transition-colors duration-150"
@@ -267,7 +295,7 @@ function AdminDashboard() {
       <div className="grid gap-6 xl:grid-cols-[1.6fr_0.8fr]">
         
         {/* Table panel */}
-        <RecentCalculationsTable rows={data.recent} />
+        <RecentCalculationsTable rows={recent} />
         
         {/* Surcharge alert and system notices */}
         <Card>
@@ -279,7 +307,7 @@ function AdminDashboard() {
             
             {/* System grid stats */}
             <div className="grid grid-cols-2 gap-3">
-              {Object.entries(data.systemSummary).map(([name, value]) => (
+              {Object.entries(systemSummary).map(([name, value]: any) => (
                 <div 
                   key={name} 
                   className="rounded border border-slate-200 bg-slate-50 p-3 text-xs flex flex-col gap-0.5 text-left"
@@ -293,7 +321,9 @@ function AdminDashboard() {
             </div>
 
             {/* Glowing price notices */}
-            {data.notices.slice(0, 2).map((notice) => (
+            {notices.length === 0 ? (
+              <p className="text-xs text-slate-500 py-2 text-center">No active alerts.</p>
+            ) : notices.slice(0, 2).map((notice: any) => (
               <AlertCard
                 key={notice.id}
                 variant={notice.priority === "HIGH" ? "error" : "warning"}
@@ -352,7 +382,7 @@ function CostingWorkflowStepper() {
                 step.status === "completed" 
                   ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
                   : step.status === "active"
-                  ? "bg-slate-100 border-[#002652] text-[#002652]"
+                  ? "bg-slate-100 border-jsw-corp text-jsw-corp"
                   : "bg-slate-50 border-slate-200 text-slate-400"
               }`}
             >
@@ -363,7 +393,7 @@ function CostingWorkflowStepper() {
             <div className="flex flex-col gap-0.5">
               <strong 
                 className={`text-xs font-semibold leading-none ${
-                  step.status === "active" ? "text-[#002652]" : "text-slate-800"
+                  step.status === "active" ? "text-jsw-corp" : "text-slate-800"
                 }`}
               >
                 {step.title}
@@ -383,12 +413,24 @@ function CostingWorkflowStepper() {
    2️⃣ USER LEVEL PROCUREMENTS DASHBOARD
    ---------------------------------------------------- */
 function UserDashboard() {
-  const { data, loading } = useRemote(
-    () => getOrFixture("/dashboard/user", userDashboard), 
-    userDashboard
-  );
+  const navigate = useNavigate();
+  const { data: rawData, isLoading, isError, refetch } = useQuery({
+    queryKey: ["user-dashboard"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/dashboard/user");
+      return data;
+    }
+  });
 
-  if (loading) return <DashboardSkeleton />;
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError) return <DashboardError retry={refetch} />;
+
+  const data = rawData || {};
+  const kpis = data?.kpis || {};
+  const series = data?.series || [];
+  const saved = data?.saved || [];
+  const recent = data?.recent || [];
+  const notices = data?.notices || [];
 
   return (
     <motion.div 
@@ -418,25 +460,25 @@ function UserDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard
           title="Your Calculations"
-          value={String(data.kpis.calculations)}
+          value={String(kpis.calculations ?? 0)}
           icon={<Calculator className="size-4.5" />}
           trend={{ value: "12% up", isPositive: true, label: "vs last month" }}
         />
         <KPICard
           title="Saved Alloy Recipes"
-          value={String(data.kpis.savedAlloys)}
+          value={String(kpis.savedAlloys ?? 0)}
           icon={<Layers3 className="size-4.5" />}
           trend={{ value: "8% increase", isPositive: true, label: "catalog" }}
         />
         <KPICard
           title="Estimated Cost Run"
-          value={inr(data.kpis.estimatedValue)}
+          value={inr(kpis.estimatedValue ?? 0)}
           icon={<IndianRupee className="size-4.5" />}
           trend={{ value: "Pricing locked", isPositive: true, label: "master" }}
         />
         <KPICard
           title="Recent Calculations"
-          value={String(data.kpis.recentActivity)}
+          value={String(kpis.recentActivity ?? 0)}
           icon={<TrendingUp className="size-4.5" />}
           trend={{ value: "Live active", isPositive: true, label: "indices" }}
         />
@@ -447,7 +489,7 @@ function UserDashboard() {
         
         {/* Table panel */}
         <div className="lg:col-span-2 xl:col-span-1">
-          <RecentCalculationsTable rows={data.recent} />
+          <RecentCalculationsTable rows={recent} />
         </div>
         
         {/* Costing Workflow Stepper */}
@@ -463,33 +505,20 @@ function UserDashboard() {
               <CardDescription>Fast simulation actions</CardDescription>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col justify-center gap-3">
-              <Button 
-                className="w-full h-9"
-                leftIcon={<Calculator className="size-4" />}
-              >
-                New Cost Simulation
-              </Button>
-              <Button 
-                variant="secondary" 
-                className="w-full h-9 bg-slate-100 text-slate-700 hover:bg-slate-200"
-                leftIcon={<Layers3 className="size-4" />}
-              >
-                Open Alloy Catalog
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full h-9 border-slate-200 text-slate-600 hover:bg-slate-50"
-                leftIcon={<FileSpreadsheet className="size-4" />}
-              >
-                Export Cost Sheet
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full h-9 border-slate-200 text-slate-600 hover:bg-slate-50"
-                leftIcon={<FileText className="size-4" />}
-              >
-                Download Audit Logs
-              </Button>
+              {quickActionsConfig.PDQC.map((action, idx) => {
+                const Icon = action.icon;
+                return (
+                  <Button 
+                    key={idx}
+                    variant={(action.variant as any) || "primary"} 
+                    className={`w-full h-9 ${action.variant === 'secondary' ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' : action.variant === 'outline' ? 'border-slate-200 hover:bg-slate-50 text-slate-700' : ''}`}
+                    leftIcon={<Icon className="size-4" />}
+                    onClick={() => navigate(action.to)}
+                  >
+                    {action.label}
+                  </Button>
+                );
+              })}
             </CardContent>
           </Card>
         </div>
@@ -504,7 +533,7 @@ function UserDashboard() {
           subtitle="Running seven-day indices tracker"
         >
           <div className="w-full">
-            <CostBars points={data.series} />
+            <CostBars points={series} />
           </div>
         </ChartContainer>
 
@@ -515,7 +544,9 @@ function UserDashboard() {
             <CardDescription>Active custom recipe parameters list</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 sm:grid-cols-2 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin">
-            {data.saved.map((alloy) => (
+            {saved.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center col-span-2">No saved alloys found.</p>
+            ) : saved.map((alloy: any) => (
               <div
                 key={alloy.id}
                 className="rounded border border-slate-200 p-3 bg-white hover:border-slate-400 transition-colors flex flex-col justify-between relative group"
@@ -547,7 +578,9 @@ function UserDashboard() {
             <CardDescription>Dynamic price list events catalog</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 overflow-y-auto max-h-[220px] pr-1 scrollbar-thin">
-            {data.notices.map((notice) => (
+            {notices.length === 0 ? (
+              <p className="text-xs text-slate-500 py-4 text-center">No active alerts.</p>
+            ) : notices.map((notice: any) => (
               <div 
                 key={notice.id} 
                 className="rounded border border-slate-200 p-2.5 text-xs bg-white hover:bg-slate-50 transition-colors flex flex-col gap-1 text-left"
@@ -591,7 +624,11 @@ function RecentCalculationsTable({ rows }: { rows: Calculation[] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((row) => (
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-6 text-slate-500">No recent calculations found.</TableCell>
+                </TableRow>
+              ) : rows.map((row) => (
                 <TableRow key={row.id} className="hover:bg-slate-50/50">
                   <TableCell className="font-mono text-xs text-slate-900 font-semibold">{row.batchId}</TableCell>
                   <TableCell className="font-semibold text-slate-800">{row.alloy?.name ?? row.name}</TableCell>

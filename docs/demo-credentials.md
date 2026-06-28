@@ -1,13 +1,11 @@
-# MCMS Demo Credentials
+# JSW MCMS Demo Credentials
 
-ADMIN
-`admin@jsw-mcms.local`
-MCMS@2026
+## Costing Department (Admin)
+- **Email**: `admin@jsw-mcms.local`
+- **Password**: `MCMS@2026`
+- **Role**: `COSTING_DEPARTMENT` (Full System Access)
 
-EMPLOYEE
-`employee@jsw-mcms.local`
-MCMS@2026
-
-USER
-`user@jsw-mcms.local`
-MCMS@2026
+## PDQC Team (User)
+- **Email**: `pdqc@jsw-mcms.local`
+- **Password**: `MCMS@2026`
+- **Role**: `PDQC` (Read-Only Access)

@@ -1,16 +1,19 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Layers, 
-  Lock, 
-  Trash2, 
-  CheckCircle,
-  Sparkles,
-  XCircle,
   X,
-  Edit
+  Loader2, 
+  AlertCircle,
+  MoreVertical,
+  Copy,
+  Trash2,
+  Edit2,
+  CheckCircle2,
+  RefreshCw
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Shared design system components
 import { 
@@ -20,14 +23,18 @@ import {
   Select, 
   Badge, 
   Button, 
-  inr 
+  inr,
+  AlertBanner
 } from "@jsw-mcms/ui";
 
-import { useSummaryStore } from "@/store/summaryStore";
+import { useWorkspaceStore } from "@/store/workspaceStore";
 import { RawMaterialTable } from "./RawMaterialTable";
 import type { RawMaterialItem } from "./RawMaterialTable";
 import type { Grade, Metal, RawMaterial } from "@/types";
 import { api } from "@/services/api";
+import { usePreviewCalculationMutation, type CalculationItemPayload } from "@/services/api/calculation.api";
+import { useDebounce } from "@/hooks/useDebounce";
+import { AnimatedNumber } from "./AnimatedNumber";
 
 // JSW MSME Steel categories and types catalog
 export interface JSWSteelType {
@@ -142,7 +149,7 @@ export const jswCategories: JSWCategory[] = defaultJswCategories;
 
 export interface CalculationCardState {
   id: string;
-  type: "metal" | "raw_material";
+  type: "metal" | "raw_material" | "grade_builder";
   metalId: string;
   gradeId: string;
   rawMaterialId: string;
@@ -164,73 +171,67 @@ interface CalculationCardProps {
   rawMaterialsList: RawMaterial[];
   onUpdateData: (id: string, data: Partial<CalculationCardState>) => void;
   onRemove: () => void;
+  searchQuery?: string;
 }
 
-function ProductThumbnail({ category, steelType }: { category: string; steelType: string }) {
-  const normalizedCat = category.toLowerCase();
-  const normalizedSteel = steelType.toLowerCase();
 
-  // Coil illustrations
-  if (normalizedSteel.includes("coil") || normalizedCat.includes("coil")) {
-    return (
-      <svg viewBox="0 0 100 100" className="size-14 bg-slate-50 border border-border rounded-sm p-1 shrink-0">
-        <ellipse cx="50" cy="50" rx="35" ry="25" fill="#002652" />
-        <ellipse cx="50" cy="50" rx="20" ry="14" fill="#ffffff" />
-        <ellipse cx="50" cy="50" rx="10" ry="7" fill="#002652" />
-      </svg>
-    );
+
+interface CalculationErrorDetail {
+  reason: string;
+  field: string;
+  fix: string;
+}
+
+export function parseCalculationError(error: any): CalculationErrorDetail {
+  const data = error?.response?.data;
+  if (data?.message && data?.field && data?.fix) {
+    return {
+      reason: data.message,
+      field: data.field,
+      fix: data.fix
+    };
   }
-
-  // Sheet illustrations
-  if (normalizedSteel.includes("sheet") || normalizedCat.includes("sheet")) {
-    return (
-      <svg viewBox="0 0 100 100" className="size-14 bg-slate-50 border border-border rounded-sm p-1 shrink-0">
-        <path d="M20 40 L70 20 L85 35 L35 55 Z" fill="#64748b" stroke="#ffffff" strokeWidth="0.5" />
-        <path d="M20 50 L70 30 L85 45 L35 65 Z" fill="#475569" stroke="#ffffff" strokeWidth="0.5" />
-        <path d="M20 60 L70 40 L85 55 L35 75 Z" fill="#334155" stroke="#ffffff" strokeWidth="0.5" />
-      </svg>
-    );
+  const message = data?.message || error?.message || "An unexpected error occurred during costing calculation.";
+  const msgLower = message.toLowerCase();
+  
+  let field = "General Workspace";
+  let fix = "Please refresh the page or try adjusting the costing inputs.";
+  
+  if (msgLower.includes("quantity") || msgLower.includes("qty")) {
+    field = "Quantity (kg)";
+    fix = "Please enter a positive numeric quantity (e.g., > 0).";
+  } else if (msgLower.includes("grade")) {
+    field = "Steel Grade Selection";
+    fix = "Select a valid steel grade for the chosen metal type.";
+  } else if (msgLower.includes("material") || msgLower.includes("composition") || msgLower.includes("alloy")) {
+    field = "Raw Materials / Recipe Composition";
+    fix = "Ensure your raw material percentages sum exactly to 100%.";
+  } else if (msgLower.includes("price") || msgLower.includes("rate")) {
+    field = "Master Price Book";
+    fix = "Check database settings or contact administrator for rate validation.";
   }
+  
+  return { reason: message, field, fix };
+}
 
-  // Plate illustrations
-  if (normalizedSteel.includes("plate") || normalizedCat.includes("plate")) {
-    return (
-      <svg viewBox="0 0 100 100" className="size-14 bg-slate-50 border border-border rounded-sm p-1 shrink-0">
-        <path d="M15 45 L70 25 L85 45 L30 65 Z" fill="#52525b" />
-        <path d="M15 45 L15 53 L30 73 L30 65 Z" fill="#27272a" />
-        <path d="M30 65 L30 73 L85 53 L85 45 Z" fill="#18181b" />
-      </svg>
-    );
-  }
-
-  // Wire Rod illustrations
-  if (normalizedSteel.includes("rod") || normalizedCat.includes("rod")) {
-    return (
-      <svg viewBox="0 0 100 100" className="size-14 bg-slate-50 border border-border rounded-sm p-1 shrink-0">
-        <circle cx="50" cy="50" r="25" fill="none" stroke="#7c3aed" strokeWidth="3" />
-        <circle cx="55" cy="45" r="25" fill="none" stroke="#7c3aed" strokeWidth="2.5" opacity="0.8" />
-        <circle cx="45" cy="55" r="25" fill="none" stroke="#7c3aed" strokeWidth="2" opacity="0.6" />
-      </svg>
-    );
-  }
-
-  // Structural illustrations
-  if (normalizedSteel.includes("angle") || normalizedSteel.includes("channel") || normalizedSteel.includes("beam") || normalizedCat.includes("structural")) {
-    return (
-      <svg viewBox="0 0 100 100" className="size-14 bg-slate-50 border border-border rounded-sm p-1 shrink-0">
-        <path d="M25 25 L35 25 L35 45 L75 45 L75 25 L85 25 L85 75 L75 75 L75 55 L35 55 L35 75 L25 75 Z" fill="#0891b2" />
-      </svg>
-    );
-  }
-
-  // Default: Rebar/Bar (TMT)
+export function highlightText(text: string, query: string) {
+  if (!query || !query.trim() || !text) return <span>{text}</span>;
+  
+  const regex = new RegExp(`(${query.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  
   return (
-    <svg viewBox="0 0 100 100" className="size-14 bg-slate-50 border border-border rounded-sm p-1 shrink-0">
-      <rect x="15" y="42" width="70" height="8" rx="2" fill="#10b981" />
-      <path d="M25 42 L30 50 M40 42 L45 50 M55 42 L60 50 M70 42 L75 50" stroke="#ffffff" strokeWidth="1" opacity="0.6" />
-      <rect x="15" y="58" width="70" height="8" rx="2" fill="#047857" />
-      <path d="M20 58 L25 66 M35 58 L40 66 M50 58 L55 66 M65 58 L70 66" stroke="#ffffff" strokeWidth="1" opacity="0.6" />
-    </svg>
+    <span>
+      {parts.map((part, i) => 
+        regex.test(part) ? (
+          <mark key={i} className="bg-yellow-250 text-slate-900 px-0.5 rounded-sm font-semibold">
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </span>
   );
 }
 
@@ -242,13 +243,15 @@ export function CalculationCard({
   rawMaterialsList,
   onUpdateData,
   onRemove,
+  searchQuery = "",
 }: CalculationCardProps) {
   // Load dynamic JSW Product Catalog from ERP database
   const [categoriesList, setCategoriesList] = useState<JSWCategory[]>(defaultJswCategories);
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   
   // Zustand Store Integration for reactive summary syncing
-  const { summaryItems, addSummaryItem, removeSummaryItem } = useSummaryStore();
+  const { summaryItems, addSummaryItem, removeSummaryItem } = useWorkspaceStore();
 
   useEffect(() => {
     let active = true;
@@ -286,49 +289,86 @@ export function CalculationCard({
   const activeGrade = gradesList.find(g => g.id === card.gradeId || g.name.toLowerCase() === activeGradeName.toLowerCase()) || gradesList[0];
   const activeMetal = metalsList.find(m => m.id === card.metalId || m.id === activeGrade?.metalId) || metalsList[0];
 
-  const metalBasePrice = activeMetal?.prices?.[0]?.pricePerUnit ? Number(activeMetal.prices[0].pricePerUnit) : (selectedSteelType?.basePrice || 0);
+
   const gradeMultiplier = activeGrade ? Number(activeGrade.multiplier) : 1;
   const gradeExtraPrice = activeGrade ? Number(activeGrade.extraPrice) : 0;
 
-  const standardUnitPrice = useMemo(() => {
-    return metalBasePrice * gradeMultiplier + gradeExtraPrice;
-  }, [metalBasePrice, gradeMultiplier, gradeExtraPrice]);
-
-  const standardTotalCost = useMemo(() => {
-    return card.quantity * standardUnitPrice;
-  }, [card.quantity, standardUnitPrice]);
-
-  // Raw material composition pricing data (if expanded/alloyed)
-  const mappedRawMaterials = useMemo(() => {
-    return card.rawMaterials.map((item) => {
-      if (item.compositionPct !== undefined) return item;
-      const pct = card.quantity > 0 ? (item.quantity / card.quantity) * 100 : 0;
-      return { ...item, compositionPct: pct };
-    });
-  }, [card.rawMaterials, card.quantity]);
-
-  const rawMaterialsTotalCost = useMemo(() => {
-    return mappedRawMaterials.reduce((total, item) => {
-      const raw = rawMaterialsList.find((rm) => rm.id === item.rawMaterialId);
-      const rawPrice = Number(raw?.prices?.[0]?.pricePerUnit ?? 0);
-      const qty = card.quantity > 0 ? (item.compositionPct! / 100) * card.quantity : item.quantity;
-      return total + (qty * rawPrice);
-    }, 0);
-  }, [mappedRawMaterials, rawMaterialsList, card.quantity]);
-
-  // Decide computed cost and unit price based on raw material configuration
   const usesRawMaterials = card.rawMaterials.length > 0;
 
-  const computedTotalCost = useMemo(() => {
-    return usesRawMaterials ? rawMaterialsTotalCost : standardTotalCost;
-  }, [usesRawMaterials, rawMaterialsTotalCost, standardTotalCost]);
+  // Local state for backend results
+  const [computedTotalCost, setComputedTotalCost] = useState<number>(0);
+  const [computedUnitPrice, setComputedUnitPrice] = useState<number>(0);
+  const [rawMaterialsTotalCost, setRawMaterialsTotalCost] = useState<number>(0);
 
-  const computedUnitPrice = useMemo(() => {
-    if (usesRawMaterials) {
-      return card.quantity > 0 ? (rawMaterialsTotalCost / card.quantity) : 0;
+  // Debounced input states to prevent backend spam
+  const debouncedQuantity = useDebounce(card.quantity, 500);
+  const debouncedRawMaterials = useDebounce(card.rawMaterials, 500);
+  const debouncedMetalId = useDebounce(activeMetal?.id, 500);
+  const debouncedGradeId = useDebounce(activeGrade?.id, 500);
+
+  const previewMutation = usePreviewCalculationMutation();
+
+  useEffect(() => {
+    // Flatten the payload into the format expected by POST /calculations/preview
+    const items: CalculationItemPayload[] = [];
+    
+    if (card.type === "raw_material" || usesRawMaterials) {
+      debouncedRawMaterials.forEach(rm => {
+        const itemQty = card.type === "raw_material" ? rm.quantity : (debouncedQuantity * ((rm.compositionPct ?? 0) / 100));
+        if (itemQty > 0) {
+          items.push({
+            rawMaterialId: rm.rawMaterialId,
+            quantity: itemQty,
+            compositionPct: rm.compositionPct
+          });
+        }
+      });
+    } else {
+      if (debouncedQuantity > 0) {
+        items.push({
+          metalId: debouncedMetalId || card.metalId,
+          gradeId: debouncedGradeId || card.gradeId,
+          quantity: debouncedQuantity,
+        });
+      }
     }
-    return standardUnitPrice;
-  }, [usesRawMaterials, card.quantity, rawMaterialsTotalCost, standardUnitPrice]);
+
+    if (items.length > 0) {
+      previewMutation.mutate({
+        name: "Preview",
+        mode: card.type === "raw_material" ? "raw-material" : "metal",
+        items
+      }, {
+        onSuccess: (data) => {
+          const finalCostNum = Number(data.finalCost);
+          setComputedTotalCost(finalCostNum);
+          setComputedUnitPrice(debouncedQuantity > 0 ? finalCostNum / debouncedQuantity : 0);
+          if (card.type === "raw_material" || usesRawMaterials) {
+            setRawMaterialsTotalCost(finalCostNum);
+          }
+        }
+      });
+    } else {
+      setComputedTotalCost(0);
+      setComputedUnitPrice(0);
+      setRawMaterialsTotalCost(0);
+    }
+  }, [
+    debouncedQuantity, 
+    debouncedRawMaterials, 
+    debouncedMetalId, 
+    debouncedGradeId, 
+    card.type, 
+    usesRawMaterials, 
+    card.metalId, 
+    card.gradeId
+  ]);
+
+  const mappedRawMaterials = card.rawMaterials.map((item) => {
+    if (item.compositionPct !== undefined) return item;
+    const pct = card.type !== "raw_material" && card.quantity > 0 ? (item.quantity / card.quantity) * 100 : 0;
+    return { ...item, compositionPct: pct };
+  });
 
   const isAdded = useMemo(() => {
     return summaryItems.some((item) => item.id === card.id);
@@ -339,7 +379,7 @@ export function CalculationCard({
     if (isAdded) {
       const summaryItem = {
         id: card.id,
-        name: `${activeSteelTypeName} (${activeGradeName})`,
+        name: card.type === "raw_material" ? (card.gradeName || "Custom Material List") : `${activeSteelTypeName} (${activeGradeName})`,
         quantity: card.quantity,
         unitPrice: computedUnitPrice,
         gradeMultiplier: gradeMultiplier,
@@ -461,24 +501,30 @@ export function CalculationCard({
 
   const handleAddToSummary = () => {
     // 1. Validation Before Action
-    if (card.quantity <= 0) {
+    if (card.type !== "raw_material" && card.quantity <= 0) {
       toast.error("Cannot add to summary without quantity. Please input a quantity > 0.");
       return;
     }
-    if (!activeCategoryName || !activeSteelTypeName || !activeGradeName) {
+    if (card.type !== "raw_material" && (!activeCategoryName || !activeSteelTypeName || !activeGradeName)) {
       toast.error("Cannot add to summary. Product parameters are incomplete.");
       return;
     }
 
     // 2. Create Calculation Item
+    const name = card.type === "raw_material" 
+      ? (card.gradeName || "Custom Material List") 
+      : `${activeSteelTypeName} (${activeGradeName})`;
+    
+    const baseCost = card.type === "raw_material" ? rawMaterialsTotalCost : computedTotalCost;
+
     const summaryItem = {
       id: card.id,
-      name: `${activeSteelTypeName} (${activeGradeName})`,
-      quantity: card.quantity,
+      name,
+      quantity: card.type === "raw_material" ? card.rawMaterials.reduce((sum, rm) => sum + rm.quantity, 0) : card.quantity,
       unitPrice: computedUnitPrice,
-      gradeMultiplier: gradeMultiplier,
-      extraPrice: gradeExtraPrice,
-      baseCost: computedTotalCost,
+      gradeMultiplier: 1.0,
+      extraPrice: 0,
+      baseCost: baseCost,
       metalId: activeMetal?.id || card.metalId || "metal-ss",
       gradeId: activeGrade?.id || card.gradeId || "grade-304",
       categoryName: activeCategoryName,
@@ -492,7 +538,7 @@ export function CalculationCard({
     // 3. Push and Update summary
     addSummaryItem(summaryItem);
     onUpdateData(card.id, { addedToSummary: true });
-    toast.success(`✓ Added ${activeSteelTypeName} to Industrial summary ledger!`);
+    toast.success(`✓ Added ${name} to Industrial summary ledger!`);
   };
 
   const handleRemoveFromSummary = () => {
@@ -506,247 +552,418 @@ export function CalculationCard({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
-      className="group relative text-left animate-fade-in"
+      className="group relative text-left animate-fade-in mb-5"
     >
-      <Card className="overflow-hidden border-border bg-white transition-all duration-200 hover:border-secondary-foreground relative rounded-md">
-        {/* Decorative JSW blue accent strip */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-primary" />
-
-        <CardContent className="p-4 flex flex-col gap-3">
-          
-          {/* CARD HEADER: Dynamic MSME Visual Thumbnail */}
-          <div className="flex items-center justify-between border-b border-slate-100 h-[60px] pb-2">
-            <div className="flex items-center gap-3">
-              <ProductThumbnail category={activeCategoryName} steelType={activeSteelTypeName} />
-              
-              <div className="flex flex-col text-left">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="border-blue-200 text-blue-700 bg-blue-50/70 font-black text-[9px] px-1.5 py-0.5 rounded-sm leading-none shrink-0">
-                    Card {index + 1}
-                  </Badge>
-                  <h3 className="font-extrabold text-slate-800 tracking-tight text-xs uppercase truncate max-w-44" title={activeSteelTypeName}>
-                    {activeSteelTypeName}
-                  </h3>
-                </div>
-                <span className="text-[9px] text-slate-400 font-extrabold uppercase mt-0.5 leading-none">
-                  {activeCategoryName} • Grade: {activeGradeName}
-                </span>
-              </div>
-            </div>
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 rounded-sm text-slate-400 hover:bg-slate-50 hover:text-red-500 p-0"
-              onClick={handleConfirmRemove}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+      <Card className={`overflow-visible border bg-white rounded-sm font-inter transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:scale-[1.005] ${
+        isAdded 
+          ? "border-[#1A365D]/40 shadow-md ring-1 ring-[#1A365D]/20" 
+          : "border-slate-200 shadow-sm hover:border-slate-300 hover:shadow-md"
+      }`}>
+        
+        {/* HEADER: Card Number, Grade Name, Status, Last Updated, More Menu */}
+        <div className={`flex items-center justify-between border-b px-4 py-2.5 transition-colors ${
+          isAdded ? "border-[#1A365D]/10 bg-blue-50/40" : "border-slate-100 bg-slate-50/70"
+        }`}>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="border-slate-300 text-slate-700 bg-white font-mono text-[10px] px-2 py-0.5 rounded-sm shadow-sm">
+              #{index + 1}
+            </Badge>
+            <Badge variant="outline" className="border-slate-200 text-slate-450 bg-white font-mono text-[9px] px-1.5 py-0.5 rounded-sm shadow-xs">
+              ID: {highlightText(card.id.substring(0, 8), searchQuery)}
+            </Badge>
+            <h3 className="font-bold text-slate-800 text-sm tracking-tight flex items-center gap-2">
+              {card.type === "raw_material" 
+                ? highlightText(card.gradeName || "Custom Material List", searchQuery) 
+                : highlightText(activeSteelTypeName, searchQuery)
+              } ({highlightText(activeGradeName, searchQuery)})
+            </h3>
+            {isAdded ? (
+              <Badge variant="success" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] rounded-sm px-1.5 py-0 border flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                Added
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] rounded-sm px-1.5 py-0 border">
+                Draft
+              </Badge>
+            )}
           </div>
 
-          {/* Form dropdown selectors */}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 border-b border-slate-100 pb-3">
-            <div className="flex flex-col gap-1 w-full text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">Category</span>
-                <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">ENUM</span>
-              </div>
-              <Select
-                value={activeCategoryName}
-                options={categoriesList.map(c => ({ value: c.name, label: c.name }))}
-                onChange={(e) => handleCategoryChange(e.target.value)}
-                className="rounded-sm border-border focus:border-primary focus:ring-primary font-inter"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1 w-full text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">Steel Type</span>
-                <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">ENUM</span>
-              </div>
-              <Select
-                value={activeSteelTypeName}
-                options={selectedCategory?.steelTypes.map(s => ({ value: s.name, label: s.name })) || []}
-                onChange={(e) => handleSteelTypeChange(e.target.value)}
-                className="rounded-sm border-border focus:border-primary focus:ring-primary font-inter"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1 w-full text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">Grade</span>
-                <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">ENUM</span>
-              </div>
-              <Select
-                value={activeGradeName}
-                options={selectedSteelType?.grades.map(g => ({ value: g, label: g })) || []}
-                onChange={(e) => handleGradeChange(e.target.value)}
-                className="rounded-sm border-border focus:border-primary focus:ring-primary font-inter"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1 w-full text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">Sub-grade</span>
-                <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">ENUM</span>
-              </div>
-              <Select
-                value={activeSubGradeName}
-                options={selectedSteelType?.subGrades.map(sg => ({ value: sg, label: sg })) || []}
-                onChange={(e) => handleSubGradeChange(e.target.value)}
-                className="rounded-sm border-border focus:border-primary focus:ring-primary font-inter"
-              />
-            </div>
-          </div>
-
-          {/* Form parameters */}
-          <div className="grid gap-3 sm:grid-cols-2 border-b border-slate-100 pb-3">
-            <div className="flex flex-col gap-1 w-full text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#56657a]">Quantity (kg)</span>
-                <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">FLOAT</span>
-              </div>
-              <Input
-                type="number"
-                value={card.quantity === 0 ? "" : card.quantity}
-                onChange={(e) => handleQuantityChange(Number(e.target.value))}
-                placeholder="0.00"
-                rightIcon={<span className="text-[10px] font-bold text-slate-400">kg</span>}
-                className="rounded-sm border-border focus:border-primary focus:ring-primary font-geist font-bold text-right"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1 w-full text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[#56657a] flex items-center gap-1">
-                  <span>Price / kg</span>
-                  <Badge variant="success" icon={<Lock className="h-2.5 w-2.5" />} className="px-1.5 py-0 rounded-sm text-[8px] border-none font-bold">
-                    master
-                  </Badge>
-                </span>
-                <span className="text-[9px] font-mono font-bold text-blue-500 uppercase">INR</span>
-              </div>
-              <div className="flex h-9.5 w-full items-center justify-between rounded-sm border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-[#10233d]">
-                <span className="font-geist font-bold">{inr(computedUnitPrice)}</span>
-                {usesRawMaterials && (
-                  <Badge variant="info" className="px-1.5 py-0.5 rounded-sm text-[8px] uppercase tracking-wider font-extrabold bg-blue-50 text-blue-700">Alloyed</Badge>
+          <div className="flex items-center gap-2 relative">
+            {/* E5 fix: removed hardcoded 'Updated just now' — only show actual timestamp when available */}
+            {card.type !== "raw_material" && card.quantity > 0 && (
+              <span className="text-[10px] text-slate-400 font-medium hidden sm:inline-block">
+                {computedUnitPrice === 0 ? (
+                  <Badge variant="danger" className="text-[8px] font-black tracking-wide px-1 rounded-sm">Price Missing</Badge>
+                ) : (
+                  `${inr(computedUnitPrice)}/kg`
                 )}
-              </div>
+              </span>
+            )}
+            <div className="relative">
+              <button
+                onClick={() => setIsMoreMenuOpen(!isMoreMenuOpen)}
+                aria-label="Card Options"
+                aria-haspopup="true"
+                aria-expanded={isMoreMenuOpen}
+                className="h-7 w-7 flex items-center justify-center rounded-sm text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-[#1A365D] focus-visible:outline-none"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              
+              <AnimatePresence>
+                {isMoreMenuOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40" 
+                      onClick={() => setIsMoreMenuOpen(false)}
+                    />
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95, transformOrigin: "top right" }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-1 w-36 bg-white rounded-sm shadow-lg border border-slate-200 z-50 overflow-hidden py-1"
+                    >
+                      <button
+                        className="w-full text-left px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2 transition-colors cursor-pointer"
+                        onClick={() => {
+                          setIsMoreMenuOpen(false);
+                          toast.info("Duplicate functionality pending");
+                        }}
+                      >
+                        <Copy className="h-3.5 w-3.5 text-slate-400" /> Duplicate
+                      </button>
+                      <button
+                        className="w-full text-left px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors cursor-pointer"
+                        onClick={() => {
+                          setIsMoreMenuOpen(false);
+                          handleConfirmRemove();
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" /> Delete
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
             </div>
           </div>
+        </div>
 
-          {/* RAW MATERIAL INGREDIENTS SECTION */}
-          {card.type === "metal" && (
-            <div className="flex flex-col gap-2 border-b border-slate-100 pb-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <Layers className="h-3.5 w-3.5 text-blue-500" />
-                  <span>Recipe Ingredients</span>
-                </h4>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsBuilderOpen(true)}
-                  className="h-7 px-2.5 rounded-sm text-[10px] font-black border-blue-200 text-blue-600 hover:bg-blue-50/50 uppercase tracking-wider flex items-center gap-1"
-                >
-                  <Edit className="h-3 w-3" />
-                  <span>{usesRawMaterials ? "Edit Recipe" : "Add Ingredient"}</span>
-                </Button>
+        <CardContent className="p-0 flex flex-col">
+          
+          {/* BODY SECTION 1: Category, Steel Type, Grade, Sub Grade */}
+          {card.type !== "raw_material" && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border-b border-slate-100 bg-white">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</label>
+                <Select
+                  value={activeCategoryName}
+                  options={categoriesList.map(c => ({ value: c.name, label: c.name }))}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="h-8 rounded-sm border-slate-200 text-xs font-medium focus:ring-[#1A365D] hover:border-slate-300 transition-colors shadow-sm"
+                />
               </div>
-
-              {usesRawMaterials ? (
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {mappedRawMaterials.map((item, index) => {
-                    const raw = rawMaterialsList.find((rm) => rm.id === item.rawMaterialId);
-                    const name = raw?.name || "Ingredient";
-                    const pct = item.compositionPct !== undefined ? item.compositionPct.toFixed(1) : "0.0";
-                    return (
-                      <Badge
-                        key={index}
-                        variant="outline"
-                        className="bg-slate-55 border-slate-200 text-slate-700 text-[10px] font-bold py-1 px-2.5 rounded-sm flex items-center gap-1.5"
-                      >
-                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                        <span>{name}</span>
-                        <span className="text-slate-400 font-extrabold font-geist">({pct}%)</span>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-[11px] text-slate-400 font-medium italic mt-1 text-left">
-                  No custom recipe configured. Using standard grade pricing.
-                </p>
-              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Steel Type</label>
+                <Select
+                  value={activeSteelTypeName}
+                  options={selectedCategory?.steelTypes.map(s => ({ value: s.name, label: s.name })) || []}
+                  onChange={(e) => handleSteelTypeChange(e.target.value)}
+                  className="h-8 rounded-sm border-slate-200 text-xs font-medium focus:ring-[#1A365D] hover:border-slate-300 transition-colors shadow-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Grade</label>
+                <Select
+                  value={activeGradeName}
+                  options={selectedSteelType?.grades.map(g => ({ value: g, label: g })) || []}
+                  onChange={(e) => handleGradeChange(e.target.value)}
+                  className="h-8 rounded-sm border-slate-200 text-xs font-medium focus:ring-[#1A365D] hover:border-slate-300 transition-colors shadow-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Sub Grade</label>
+                <Select
+                  value={activeSubGradeName}
+                  options={selectedSteelType?.subGrades.map(sg => ({ value: sg, label: sg })) || []}
+                  onChange={(e) => handleSubGradeChange(e.target.value)}
+                  className="h-8 rounded-sm border-slate-200 text-xs font-medium focus:ring-[#1A365D] hover:border-slate-300 transition-colors shadow-sm"
+                />
+              </div>
             </div>
           )}
 
-          {/* DYNAMIC CALCULATED COST SUMMARY CARD */}
-          <div className="rounded-sm bg-jsw-corp p-3 text-white shadow-sm relative overflow-hidden flex flex-col gap-2 mt-1">
-            <div className="absolute right-0 bottom-0 w-32 h-32 bg-blue-500 rounded-full blur-3xl opacity-20 pointer-events-none" />
-            
-            <div className="flex justify-between items-center text-[9px] uppercase font-bold tracking-wider text-blue-200">
-              <span>Calculated Cost Summary</span>
-              
-              {/* PRIORITY 2: ADD TO SUMMARY WORKFLOW CHIPS */}
-              {isAdded ? (
-                <Badge variant="success" icon={<CheckCircle className="h-2.5 w-2.5" />} className="bg-emerald-600/30 text-emerald-200 border-none font-bold text-[8px] rounded-sm px-1.5 py-0.5">
-                  ✓ Added To Summary
-                </Badge>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Sparkles className="h-2.5 w-2.5 text-yellow-400 animate-spin" />
-                  <span className="text-[8px] text-blue-200 font-extrabold uppercase">Draft state</span>
+          {/* ERROR ALERT BANNER */}
+          {previewMutation.isError && (
+            <div className="px-4 py-3 bg-[#fdf0f0]/30 border-b border-[#f9cccc]/60 shrink-0">
+              {(() => {
+                const parsed = parseCalculationError(previewMutation.error);
+                return (
+                  <AlertBanner
+                    variant="danger"
+                    title="Cost Calculation Failed"
+                    isDismissible={false}
+                    description={`${parsed.reason} - ${parsed.field} (${parsed.fix})`}
+                    action={
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="text-red-700 border-red-200 hover:bg-red-50 hover:border-red-300"
+                        onClick={() => previewMutation.reset()}
+                      >
+                        Dismiss
+                      </Button>
+                    }
+                  />
+                );
+              })()}
+            </div>
+          )}
+
+          {/* BODY SECTION 2: Quantity & Quick Pricing */}
+          {card.type !== "raw_material" && (
+            <div className={`flex flex-col md:flex-row items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50 relative transition-all duration-200 ${previewMutation.isPending ? "animate-pulse" : ""}`}>
+              {previewMutation.isPending && (
+                <div className="absolute inset-x-0 top-0 h-0.5 z-10 overflow-hidden bg-blue-50/30">
+                  <div className="h-full bg-[#1A365D] animate-loading-bar" />
                 </div>
               )}
-            </div>
-
-            {/* TOTAL COSTING VISUAL CORE DISPLAY */}
-            <div className="flex items-center justify-between gap-4 mt-1">
-              <div className="flex items-center gap-4.5">
-                <div className="flex flex-col text-left">
-                  <span className="text-[8px] text-blue-300 uppercase tracking-wider leading-none">TOTAL COST</span>
-                  <strong className="text-lg font-black tracking-tight text-white mt-1 font-geist">
-                    {inr(computedTotalCost)}
-                  </strong>
+              
+              <div className="flex items-center gap-4 w-full md:w-auto mb-3 md:mb-0">
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor={`qty-input-${card.id}`} className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Quantity (kg)</label>
+                  <Input
+                    id={`qty-input-${card.id}`}
+                    type="number"
+                    value={card.quantity === 0 ? "" : card.quantity}
+                    onChange={(e) => handleQuantityChange(Number(e.target.value))}
+                    placeholder="0.00"
+                    className="h-8 w-32 rounded-sm border-slate-200 text-sm font-bold font-mono bg-white focus:ring-[#1A365D] hover:border-slate-300 transition-colors shadow-sm"
+                  />
                 </div>
-
-                <div className="h-6 w-px bg-white/15" />
-
-                <div className="flex flex-col text-left">
-                  <span className="text-[8px] text-blue-300 uppercase tracking-wider leading-none">Cost/Kg</span>
-                  <span className="text-[11px] font-black text-white mt-1 font-geist">{inr(computedUnitPrice)}/kg</span>
-                </div>
-
-                <div className="h-6 w-px bg-white/15" />
-
-                <div className="flex flex-col text-left">
-                  <span className="text-[8px] text-blue-300 uppercase tracking-wider leading-none">Cost/Ton</span>
-                  <span className="text-[11px] font-black text-white mt-1 font-geist">{inr(computedUnitPrice * 1000)}/t</span>
+                
+                <div className="h-10 w-px bg-slate-200 hidden md:block mx-2"></div>
+                
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Price/KG</span>
+                  {computedUnitPrice === 0 ? (
+                    <Badge variant="danger" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm mt-0.5">Price Missing</Badge>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-800 font-mono">{inr(computedUnitPrice)}</span>
+                  )}
                 </div>
               </div>
+              
+              <div className="flex items-center gap-6 w-full md:w-auto justify-end">
+                <div className="flex flex-col items-end">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Cost/Ton</span>
+                  {computedUnitPrice === 0 ? (
+                    <Badge variant="danger" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm mt-0.5">Price Missing</Badge>
+                  ) : (
+                    <span className="text-sm font-medium text-slate-600 font-mono">{inr(computedUnitPrice * 1000)}/t</span>
+                  )}
+                </div>
+                
+                <div className="flex flex-col items-end p-2 bg-white rounded-sm border border-slate-200 shadow-xs min-w-[140px]">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">Total Estimated Cost</span>
+                  {computedTotalCost === 0 ? (
+                    <Badge variant="danger" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm mt-0.5">Price Missing</Badge>
+                  ) : (
+                    <span className="text-lg font-black text-[#1A365D] font-mono leading-none">
+                      <AnimatedNumber value={computedTotalCost} formatter={inr} />
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
-              {/* DYNAMIC ADD TO SUMMARY TOGGLE TRIGGERS */}
+          {/* BODY SECTION 3: Recipe Ingredients Table */}
+          {card.type === "raw_material" || usesRawMaterials ? (
+            <div className="flex flex-col p-0 border-b border-slate-100 bg-white">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-slate-100/80">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-700 flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-slate-500" />
+                  Recipe Ingredients
+                </span>
+                <div className="flex items-center gap-4">
+                  <div className="text-right hidden sm:block">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase mr-1">Subtotal:</span>
+                    {computedTotalCost === 0 ? (
+                      <Badge variant="danger" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm inline-block">Price Missing</Badge>
+                    ) : (
+                      <span className="text-xs font-mono font-black text-slate-750">{inr(computedTotalCost)}</span>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsBuilderOpen(true)}
+                    className="h-7 px-3.5 text-xs font-bold text-[#1A365D] border-[#1A365D]/30 bg-white hover:bg-[#1A365D]/5 rounded-sm cursor-pointer flex items-center gap-1.5 shadow-xs transition-colors"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    Edit Recipe
+                  </Button>
+                </div>
+              </div>
+              <div className="px-4 py-2 text-[11px] text-slate-650">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">Material</th>
+                      <th className="py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">Composition %</th>
+                      <th className="py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500">Qty (kg)</th>
+                      <th className="py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500 text-right">Rate/KG</th>
+                      <th className="py-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-500 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {mappedRawMaterials.map((item, idx) => {
+                      const raw = rawMaterialsList.find((rm) => rm.id === item.rawMaterialId);
+                      const name = raw?.name || "Ingredient";
+                      const pct = item.compositionPct !== undefined ? Number(item.compositionPct ?? 0).toFixed(1) : "0.0";
+                      const rawPrice = Number((raw as any)?.currentRate ?? raw?.prices?.[0]?.pricePerUnit ?? 0);
+                      const qty = card.type === "raw_material" ? item.quantity : (card.quantity > 0 ? (item.compositionPct! / 100) * card.quantity : item.quantity);
+                      const amount = qty * rawPrice;
+                      
+                      return (
+                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors odd:bg-white even:bg-slate-50/20">
+                          <td className="py-1.5 font-medium text-slate-800">{highlightText(name, searchQuery)}</td>
+                          <td className="py-1.5 font-mono text-slate-600">{pct}%</td>
+                          <td className="py-1.5 font-mono text-slate-600">{Number(qty ?? 0).toFixed(1)} kg</td>
+                          <td className="py-1.5 font-mono text-slate-600 text-right font-bold">
+                            {rawPrice === 0 ? (
+                              <Badge variant="danger" className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm">No Rate</Badge>
+                            ) : (
+                              inr(rawPrice)
+                            )}
+                          </td>
+                          <td className="py-1.5 font-mono font-bold text-slate-850 text-right">
+                            {amount === 0 ? (
+                              <Badge variant="danger" className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm">Price Missing</Badge>
+                            ) : (
+                              inr(amount)
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {mappedRawMaterials.length > 0 && (
+                      <tr className="border-t-2 border-slate-200 bg-slate-50/40 font-bold">
+                        <td className="py-2 text-[10px] uppercase text-slate-500 font-bold">Total</td>
+                        <td className="py-2 font-mono text-slate-700">
+                          {(() => {
+                            const totalPct = mappedRawMaterials.reduce((sum, item) => sum + (item.compositionPct ?? 0), 0);
+                            return `${Number(totalPct.toFixed(1))}%`;
+                          })()}
+                        </td>
+                        <td className="py-2 font-mono text-slate-700">
+                          {(() => {
+                            const totalQty = mappedRawMaterials.reduce((sum, item) => {
+                              const qty = card.type === "raw_material" ? item.quantity : (card.quantity > 0 ? (item.compositionPct! / 100) * card.quantity : item.quantity);
+                              return sum + qty;
+                            }, 0);
+                            return `${totalQty.toLocaleString("en-IN", { maximumFractionDigits: 1 })} kg`;
+                          })()}
+                        </td>
+                        <td className="py-2 text-right text-[10px] text-slate-400 font-medium">Avg price / kg:</td>
+                        <td className="py-2 font-mono text-right text-[#1A365D] font-black">
+                          {computedTotalCost === 0 ? (
+                            <Badge variant="danger" className="text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm">Price Missing</Badge>
+                          ) : (
+                            inr(computedTotalCost)
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 bg-white">
+               <span className="text-[11px] font-medium text-slate-500 flex items-center gap-2">
+                 <Layers className="w-4 h-4 text-slate-300" />
+                 No custom recipe configured. Using standard grade pricing.
+               </span>
+               <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsBuilderOpen(true)}
+                  className="h-8 px-3.5 text-xs font-bold text-[#1A365D] border-[#1A365D]/30 bg-white hover:bg-[#1A365D]/5 rounded-sm cursor-pointer flex items-center gap-1.5 shadow-sm transition-colors"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Add Recipe
+                </Button>
+            </div>
+          )}
+
+          {/* FOOTER: Cost Summary Bar & CTA */}
+          <div className="flex flex-col sm:flex-row items-center justify-between p-4 bg-slate-50/70">
+            {/* I5 fix: cost breakdown placeholders labelled as pending estimates */}
+            <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto mb-4 sm:mb-0 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide">
+              <div className="flex flex-col min-w-max">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Base Cost</span>
+                {computedTotalCost === 0 ? (
+                  <Badge variant="danger" className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-sm mt-0.5 block w-max">Price Missing</Badge>
+                ) : (
+                  <span className="text-xs font-bold text-slate-700 font-mono mt-0.5">{inr(computedTotalCost)}</span>
+                )}
+              </div>
+              <div className="text-slate-200 text-base font-normal">+</div>
+              <div className="flex flex-col min-w-max">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Additives</span>
+                <span className="text-xs font-medium text-slate-400 font-mono mt-0.5">Pending</span>
+              </div>
+              <div className="text-slate-200 text-base font-normal">+</div>
+              <div className="flex flex-col min-w-max">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Adjustments</span>
+                <span className="text-xs font-medium text-slate-400 font-mono mt-0.5">Pending</span>
+              </div>
+              <div className="text-slate-200 text-base font-normal">+</div>
+              <div className="flex flex-col min-w-max">
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">Other Charges</span>
+                <span className="text-xs font-medium text-slate-400 font-mono mt-0.5">Pending</span>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="w-full sm:w-auto flex justify-end">
               {isAdded ? (
                 <Button
+                  variant="outline"
                   size="sm"
                   onClick={handleRemoveFromSummary}
-                  disabled={card.quantity <= 0}
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] h-8 px-3 rounded-sm shrink-0 flex items-center gap-1 shadow-md border-none cursor-pointer transition-all"
+                  disabled={card.type !== "raw_material" && card.quantity <= 0}
+                  className="h-8 px-4 rounded-sm hover:bg-red-50 text-slate-600 hover:text-red-700 font-semibold text-[10px] uppercase tracking-wider border-slate-200 hover:border-red-200 cursor-pointer shadow-sm transition-colors w-full sm:w-auto"
                 >
-                  <XCircle className="h-3 w-3" />
-                  <span>Remove</span>
+                  Remove From Summary
                 </Button>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={handleAddToSummary}
-                  disabled={card.quantity <= 0}
-                  className="bg-jsw-accent hover:bg-blue-700 text-white font-extrabold text-[10px] h-8 px-3 rounded-sm shrink-0 flex items-center gap-1 shadow-md border-none cursor-pointer transition-all"
-                >
-                  <span>➜ Add To Summary</span>
-                </Button>
+                <TooltipProvider delayDuration={150}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="w-full sm:w-auto">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={handleAddToSummary}
+                          disabled={card.type !== "raw_material" && card.quantity <= 0}
+                          className="h-8 px-5 rounded-sm bg-[#1A365D] hover:bg-[#122543] text-white font-semibold text-[10px] uppercase tracking-wider shadow-sm cursor-pointer transition-colors w-full"
+                        >
+                          Add To Summary
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {card.type !== "raw_material" && card.quantity <= 0 && (
+                      <TooltipContent side="top" className="text-[10px] font-medium">
+                        Enter a quantity greater than 0 to add this sheet to the summary.
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
           </div>
@@ -754,10 +971,10 @@ export function CalculationCard({
         </CardContent>
       </Card>
 
-      {/* Recipe Builder Slide-out Drawer */}
+      {/* Recipe Builder Modal Dialog */}
       <AnimatePresence>
         {isBuilderOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="recipe-modal-overlay">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -766,37 +983,83 @@ export function CalculationCard({
               onClick={() => setIsBuilderOpen(false)}
               className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
             />
-            {/* Drawer Panel */}
+            {/* Modal Panel */}
             <motion.div
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="relative z-10 w-full max-w-2xl h-full bg-white shadow-2xl flex flex-col border-l border-slate-200"
+              initial={{ scale: 0.97, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.97, opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="recipe-modal-container relative z-10"
             >
               {/* Header */}
-              <div className="flex items-center justify-between p-5 border-b border-slate-100 bg-slate-50">
+              <div className="recipe-modal-header">
                 <div className="text-left">
-                  <h3 className="text-base font-extrabold text-slate-800 uppercase tracking-tight">
+                  <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-tight">
                     Recipe Manager & Builder
                   </h3>
-                  <p className="text-[11px] text-slate-400 font-bold uppercase mt-0.5">
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">
                     Configure ingredients for {activeSteelTypeName} ({activeGradeName})
                   </p>
                 </div>
                 <button
                   onClick={() => setIsBuilderOpen(false)}
-                  className="h-8 w-8 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 cursor-pointer shadow-xs"
+                  className="h-7 w-7 rounded-sm border border-slate-200 bg-white flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 cursor-pointer shadow-xs"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
               {/* Body */}
-              <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 text-xs text-blue-800 font-medium text-left">
-                  Add and configure the composition percentage of raw material ingredients. The system will automatically calculate target quantities based on the parent card's total volume ({card.quantity} kg).
+              <div className="recipe-modal-body flex flex-col gap-4">
+                <div className="bg-blue-50/50 border border-blue-100 rounded-sm px-3 py-2 text-[11px] text-blue-800 font-medium text-left">
+                  Configure the composition percentage of raw material ingredients. Target quantities calculate automatically based on parent card total volume ({card.quantity} kg).
                 </div>
+
+                {/* Recipe Summary KPI strip */}
+                {(() => {
+                  const totalPct = card.rawMaterials.reduce((sum, rm) => {
+                    if (rm.compositionPct !== undefined) return sum + rm.compositionPct;
+                    if (card.quantity > 0) return sum + (rm.quantity / card.quantity) * 100;
+                    return sum;
+                  }, 0);
+                  const totalQty = card.rawMaterials.reduce((sum, rm) => {
+                    const pct = rm.compositionPct !== undefined ? rm.compositionPct : (card.quantity > 0 ? (rm.quantity / card.quantity) * 100 : 0);
+                    const qty = card.type === "raw_material" ? rm.quantity : (card.quantity > 0 ? (pct / 100) * card.quantity : rm.quantity);
+                    return sum + qty;
+                  }, 0);
+                  const totalCost = card.rawMaterials.reduce((sum, rm) => {
+                    const currentMaterial = rawMaterialsList.find((r) => r.id === rm.rawMaterialId) || rawMaterialsList[0];
+                    const pricePerKg = Number(currentMaterial?.prices?.[0]?.pricePerUnit ?? 0);
+                    const pct = rm.compositionPct !== undefined ? rm.compositionPct : (card.quantity > 0 ? (rm.quantity / card.quantity) * 100 : 0);
+                    const qty = card.type === "raw_material" ? rm.quantity : (card.quantity > 0 ? (pct / 100) * card.quantity : rm.quantity);
+                    return sum + (qty * pricePerKg);
+                  }, 0);
+                  
+                  const isRecipeBalanced = Math.abs(totalPct - 100) < 0.1;
+
+                  return (
+                    <div className="kpi-strip">
+                      <div className="kpi-strip-card flex flex-col text-left">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Total Weight</span>
+                        <span className="text-sm font-mono font-black text-slate-800 mt-0.5">
+                          {totalQty.toLocaleString("en-IN", { maximumFractionDigits: 1 })} kg
+                        </span>
+                      </div>
+                      <div className="kpi-strip-card flex flex-col text-left">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Estimated Cost</span>
+                        <span className="text-sm font-mono font-black text-slate-800 mt-0.5">
+                          {inr(totalCost)}
+                        </span>
+                      </div>
+                      <div className="kpi-strip-card flex flex-col text-left">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Balance Status</span>
+                        <span className={`text-xs font-bold mt-0.5 flex items-center gap-1 ${isRecipeBalanced ? "text-emerald-600" : "text-amber-600"}`}>
+                          {isRecipeBalanced ? "✓ Balanced (100%)" : `⚠ Unbalanced (${totalPct.toFixed(1)}%)`}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 
                 <RawMaterialTable
                   rawMaterials={card.rawMaterials}
@@ -807,17 +1070,36 @@ export function CalculationCard({
               </div>
 
               {/* Footer */}
-              <div className="p-5 border-t border-slate-150 bg-slate-50 flex items-center justify-between">
+              <div className="recipe-modal-footer">
                 <div className="flex flex-col text-left">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Computed Recipe Cost</span>
-                  <span className="text-lg font-black text-slate-800 mt-1">{inr(computedTotalCost)}</span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">Computed Recipe Cost</span>
+                  <span className="text-base font-mono font-black text-slate-800 mt-0.5">{inr(computedTotalCost)}</span>
                 </div>
-                <Button
-                  onClick={() => setIsBuilderOpen(false)}
-                  className="bg-[#0b63c8] hover:bg-blue-700 text-white font-extrabold text-xs h-9 px-6 rounded-xl border-none cursor-pointer"
-                >
-                  Apply & Close
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsBuilderOpen(false);
+                      toast.info("Recipe builder closed without saving.");
+                    }}
+                    className="h-8 px-4 rounded-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => {
+                      setIsBuilderOpen(false);
+                      // W3 fix: confirm recipe applied
+                      toast.success("✓ Recipe configuration applied successfully.");
+                    }}
+                    className="h-8 px-5 rounded-sm bg-[#1A365D] hover:bg-[#122543] text-white text-xs font-semibold uppercase tracking-wider shadow-sm cursor-pointer transition-colors"
+                  >
+                    Apply Recipe
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>

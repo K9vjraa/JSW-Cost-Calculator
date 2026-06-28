@@ -10,7 +10,8 @@ import {
   Home, 
   LogOut,
   Copy,
-  CheckCircle2
+  CheckCircle2,
+  Activity
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ export function Page404() {
   return (
     <main className="min-h-screen w-full flex items-center justify-center p-6 bg-slate-50/50">
       <div className="max-w-md w-full text-center flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-300">
-        <div className="size-20 rounded-2xl bg-amber-50 text-amber-500 grid place-items-center shadow-md shadow-amber-500/5 ring-1 ring-amber-200">
+        <div className="size-20 rounded-sm bg-amber-50 text-amber-500 grid place-items-center shadow-sm shadow-amber-500/5 ring-1 ring-amber-200">
           <AlertTriangle className="size-10" />
         </div>
         <div className="flex flex-col gap-2">
@@ -39,7 +40,7 @@ export function Page404() {
           <Button variant="outline" className="flex-1 text-xs h-10 border-slate-200 font-bold text-slate-600 hover:bg-slate-50" onClick={() => navigate(-1)}>
             Go Back
           </Button>
-          <Button className="flex-1 text-xs h-10 bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-md shadow-blue-500/10 flex items-center justify-center gap-1" onClick={() => navigate("/")}>
+          <Button className="flex-1 text-xs h-10 bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-sm shadow-blue-500/10 flex items-center justify-center gap-1" onClick={() => navigate("/")}>
             <Home className="size-4" /> Go to Dashboard
           </Button>
         </div>
@@ -60,7 +61,7 @@ export function Page403() {
   return (
     <main className="min-h-screen w-full flex items-center justify-center p-6 bg-slate-50/50">
       <div className="max-w-md w-full text-center flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-300">
-        <div className="size-20 rounded-2xl bg-red-50 text-red-500 grid place-items-center shadow-md shadow-red-500/5 ring-1 ring-red-200">
+        <div className="size-20 rounded-sm bg-red-50 text-red-500 grid place-items-center shadow-sm shadow-red-500/5 ring-1 ring-red-200">
           <ShieldAlert className="size-10" />
         </div>
         <div className="flex flex-col gap-2">
@@ -77,13 +78,13 @@ export function Page403() {
         <Card className="w-full border-slate-150 shadow-xs bg-white text-left p-4">
           <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5"><Lock className="size-4 text-slate-500" /> Authorized Roles</h3>
           <div className="grid gap-1.5 mt-2.5">
-            <div className="flex justify-between items-center text-xs p-2 rounded-lg border bg-slate-50">
-              <span className="font-semibold text-slate-600">Cost Settings / Users</span>
-              <span className="font-black text-blue-600 text-[10px]">ADMIN ONLY</span>
+            <div className="flex justify-between items-center text-xs p-2 rounded-sm border bg-slate-50">
+              <span className="font-semibold text-slate-600">Masters / Rates / Audits / Users / Settings</span>
+              <span className="font-black text-blue-600 text-[10px]">COSTING_DEPARTMENT ONLY</span>
             </div>
-            <div className="flex justify-between items-center text-xs p-2 rounded-lg border bg-slate-50">
-              <span className="font-semibold text-slate-600">Reports / Masters</span>
-              <span className="font-black text-slate-500 text-[10px]">ADMIN, EMPLOYEE</span>
+            <div className="flex justify-between items-center text-xs p-2 rounded-sm border bg-slate-50">
+              <span className="font-semibold text-slate-600">Dashboard / Workspace / Grades / Reports</span>
+              <span className="font-black text-slate-500 text-[10px]">COSTING_DEPARTMENT, PDQC</span>
             </div>
           </div>
         </Card>
@@ -119,7 +120,7 @@ export function Page500({ error, resetErrorBoundary }: { error?: Error; resetErr
   return (
     <main className="min-h-screen w-full flex items-center justify-center p-6 bg-slate-50/50">
       <div className="max-w-xl w-full text-center flex flex-col items-center gap-6 animate-in fade-in duration-300">
-        <div className="size-20 rounded-2xl bg-red-50 text-red-500 grid place-items-center shadow-md ring-1 ring-red-200">
+        <div className="size-20 rounded-sm bg-red-50 text-red-500 grid place-items-center shadow-sm ring-1 ring-red-200">
           <AlertTriangle className="size-10" />
         </div>
         <div className="flex flex-col gap-2">
@@ -151,7 +152,7 @@ export function Page500({ error, resetErrorBoundary }: { error?: Error; resetErr
                   {copied ? "Copied!" : "Copy Diagnostics"}
                 </Button>
               </div>
-              <pre className="bg-slate-900 text-emerald-400 font-mono text-[11px] leading-relaxed p-3.5 rounded-xl max-h-[220px] overflow-auto border shadow-inner">
+              <pre className="bg-slate-900 text-emerald-400 font-mono text-[11px] leading-relaxed p-3.5 rounded-sm max-h-[220px] overflow-auto border shadow-inner">
                 {error?.stack || diagText}
               </pre>
             </CardContent>
@@ -214,8 +215,13 @@ export function PageMaintenance() {
   return (
     <main className="min-h-screen w-full flex items-center justify-center p-6 bg-slate-50/50">
       <div className="max-w-md w-full text-center flex flex-col items-center gap-6 animate-in fade-in duration-300">
-        <div className="size-20 rounded-2xl bg-blue-50 text-blue-600 grid place-items-center shadow-md ring-1 ring-blue-200">
-          <RefreshCw className={`size-10 ${checking ? "animate-spin" : "animate-pulse"}`} />
+        <div className="size-20 rounded-sm bg-blue-50 text-blue-600 grid place-items-center shadow-sm ring-1 ring-blue-200 relative overflow-hidden">
+          <Activity className="size-10 animate-pulse" />
+          {checking && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-100 overflow-hidden">
+              <div className="h-full bg-blue-600 animate-loading-bar" />
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-2">
           <span className="text-sm font-bold uppercase tracking-wider text-blue-600">Offline / Maintenance Mode</span>
@@ -233,9 +239,9 @@ export function PageMaintenance() {
         <Button 
           disabled={checking}
           onClick={verifyConnection}
-          className="w-full text-xs h-10 bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-md shadow-blue-500/10 flex items-center justify-center gap-1.5"
+          className={`w-full text-xs h-10 bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-sm shadow-blue-500/10 flex items-center justify-center gap-1.5 transition-all ${checking ? "btn-loading-stripes" : ""}`}
         >
-          <RefreshCw className={`size-4 ${checking ? "animate-spin" : ""}`} />
+          {!checking && <RefreshCw className="size-4" />}
           {checking ? "Checking ERP Services..." : "Recheck Connection Now"}
         </Button>
       </div>

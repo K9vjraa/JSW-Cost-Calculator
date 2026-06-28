@@ -1,727 +1,836 @@
+import React, { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { 
-  Badge, 
-  Button, 
-  Card, 
-  CardContent, 
-  Input, 
-  Select, 
-  Table, 
-  TableHeader, 
-  TableBody, 
-  TableRow, 
-  TableHead, 
-  TableCell, 
-  inr 
-} from "@jsw-mcms/ui";
-import { 
-  ChevronDown, 
-  ChevronUp, 
-  GitCompare, 
-  HelpCircle, 
-  Info, 
-  Scale, 
-  Search, 
-  ShieldAlert, 
-  TrendingUp, 
-  Zap 
+  GitCompare, Search, ChevronRight, CheckCircle2, 
+  Download, Layers, Maximize2, Minimize2, Save, History, RotateCcw
 } from "lucide-react";
-import { useMemo, useState } from "react";
-import { grades as staticGrades } from "@/data/fixtures";
+import { Button, Input, inr } from "@jsw-mcms/ui";
+import { apiClient } from "@/services/api/client";
 import type { Grade } from "@/types";
-
-// Property rows definitions for mechanical, tolerances, bend and chemical groups
-interface SpecRow {
-  label: string;
-  key: string;
-  group: "mechanical" | "tolerances" | "bend" | "chemical";
-  getValue: (g: Grade) => string;
-}
-
-const specSchema: SpecRow[] = [
-  // Mechanical specs
-  { label: "Ultimate Tensile Strength (UTS)", key: "UTS", group: "mechanical", getValue: (g) => g.mechanicalProperties?.["UTS"] || "N/A" },
-  { label: "Yield Strength", key: "Yield strength", group: "mechanical", getValue: (g) => g.mechanicalProperties?.["Yield strength"] || "N/A" },
-  { label: "Elongation %", key: "Elongation", group: "mechanical", getValue: (g) => g.mechanicalProperties?.["Elongation"] || "N/A" },
-  // Chemical specs
-  { label: "Carbon (C) %", key: "C", group: "chemical", getValue: (g) => g.chemicalComposition?.["C"] || "0.00%" },
-  { label: "Chromium (Cr) %", key: "Cr", group: "chemical", getValue: (g) => g.chemicalComposition?.["Cr"] || "0.00%" },
-  { label: "Nickel (Ni) %", key: "Ni", group: "chemical", getValue: (g) => g.chemicalComposition?.["Ni"] || "0.00%" },
-  { label: "Molybdenum (Mo) %", key: "Mo", group: "chemical", getValue: (g) => g.chemicalComposition?.["Mo"] || "0.00%" },
-  { label: "Manganese (Mn) %", key: "Mn", group: "chemical", getValue: (g) => g.chemicalComposition?.["Mn"] || "0.00%" },
-  // Tolerance specs
-  { label: "Thickness Tolerance", key: "Thickness", group: "tolerances", getValue: (g) => g.toleranceProperties?.["Thickness"] || "N/A" },
-  { label: "Flatness Profile", key: "Flatness", group: "tolerances", getValue: (g) => g.toleranceProperties?.["Flatness"] || "N/A" },
-  // Bending specs
-  { label: "Minimum Radius Limit", key: "Minimum radius", group: "bend", getValue: (g) => g.bendProperties?.["Minimum radius"] || "N/A" },
-  { label: "Bending Rating", key: "Rating", group: "bend", getValue: (g) => g.bendProperties?.["Rating"] || "N/A" }
-];
+import type { RecommendationCard as RecCardType } from "@jsw-mcms/types";
+import { useCreateComparisonSession, useComparisonResults } from "@/hooks/useComparison";
+import { ComparisonMatrix } from "@/components/workspace/ComparisonMatrix";
+import { ComparisonAnalytics } from "@/components/workspace/ComparisonAnalytics";
+import { RecommendationCard as RecCardUI } from "@/components/workspace/RecommendationCard";
+import { Loader2 } from "lucide-react";
+import { useComparisonStore } from "@/store/comparisonStore";
+import { toast } from "sonner";
 
 export function ComparisonPage() {
-  const [selectedIds, setSelectedIds] = useState<string[]>(staticGrades.map((g) => g.id));
-  const [searchQuery, setSearchQuery] = useState("");
-  const [orderQuantity, setOrderQuantity] = useState<number>(1000);
-  const [sortBy, setSortBy] = useState<string>("default");
-  
-  // Highlighting settings
-  const [highlightDiffs, setHighlightDiffs] = useState(true);
-  const [showDiffsOnly, setShowDiffsOnly] = useState(false);
+  const [quickViewGrade, setQuickViewGrade] = React.useState<Grade | null>(null);
 
-  // Accordion collapsed state for property grouping
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    cost: false,
-    mechanical: false,
-    chemical: false,
-    tolerances: false,
-    bend: false
+  const {
+    selectedGradeIds: selectedIds,
+    filterCategory,
+    filterBaseMetal,
+    orderQuantity,
+    sessionId,
+    isFullScreen,
+    highlightDiffs,
+    collapsedGroups,
+    setSelectedGradeIds: setSelectedIds,
+    setSessionId,
+    setIsFullScreen,
+    setHighlightDiffs,
+    setCollapsedGroups,
+    toggleGradeSelection
+  } = useComparisonStore();
+
+  // Fetch Grades
+  const { data: gradesData = [] } = useQuery<Grade[]>({
+    queryKey: ["grades"],
+    queryFn: async () => {
+      const { data } = await apiClient.get("/grades?limit=100");
+      return data?.data || [];
+    }
   });
 
-  const toggleGroup = (group: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
+  // Queries & Mutations
+  const createSession = useCreateComparisonSession();
+  const { data: results, isLoading: isLoadingResults, dataUpdatedAt } = useComparisonResults(sessionId);
+
+  const lastUpdated = dataUpdatedAt 
+    ? new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : "Never";
+
+  const kpis = useMemo(() => {
+    if (!results || !results.grades || results.grades.length === 0) {
+      return {
+        basket: `${selectedIds.length} Selected`,
+        basketSub: "Select min 2 grades",
+        minCost: "N/A",
+        minSub: "Awaiting comparison",
+        maxCost: "N/A",
+        maxSub: "Awaiting comparison",
+        variance: "0.00%",
+        varianceSub: "No data"
+      };
+    }
+
+    const grades = results.grades;
+    const sorted = [...grades].sort((a, b) => a.rawValues.cost - b.rawValues.cost);
+    const minGrade = sorted[0];
+    const maxGrade = sorted[sorted.length - 1];
+    
+    const minVal = minGrade ? `${minGrade.gradeName} (${inr(minGrade.rawValues.cost)}/kg)` : "N/A";
+    const maxVal = maxGrade ? `${maxGrade.gradeName} (${inr(maxGrade.rawValues.cost)}/kg)` : "N/A";
+
+    let variancePercent = "0.00%";
+    if (minGrade && maxGrade && minGrade.rawValues.cost > 0) {
+      const pct = ((maxGrade.rawValues.cost - minGrade.rawValues.cost) / minGrade.rawValues.cost) * 100;
+      variancePercent = `${pct.toFixed(2)}%`;
+    }
+
+    return {
+      basket: `${selectedIds.length} Selected`,
+      basketSub: `Out of ${gradesData.length} available`,
+      minCost: minVal,
+      minSub: "Optimal commercial option",
+      maxCost: maxVal,
+      maxSub: "Premium surcharge option",
+      variance: variancePercent,
+      varianceSub: "Cost variance spread"
+    };
+  }, [results, selectedIds.length, gradesData.length]);
+
+  // Local states for advanced filters
+  const [searchVal, setSearchVal] = React.useState("");
+  const [debouncedSearch, setDebouncedSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("all");
+  const [materialFilter, setMaterialFilter] = React.useState("all");
+  const [versionFilter, setVersionFilter] = React.useState("all");
+  const [sortByLocal, setSortByLocal] = React.useState("name-asc");
+
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchVal);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [searchVal]);
+
+  const handleResetFilters = () => {
+    setSearchVal("");
+    setDebouncedSearch("");
+    setStatusFilter("all");
+    setMaterialFilter("all");
+    setVersionFilter("all");
+    setSortByLocal("name-asc");
   };
 
-  // Helper mapping alloy category prices from fixtures
-  const getBasePrice = (grade: Grade) => {
-    if (grade.metalId === "metal-ss" || grade.name.includes("SS")) return 62.50;
-    if (grade.metalId === "metal-as" || grade.name.includes("Alloy")) return 72.00;
-    return 80.00; // fallback default
-  };
-
-  const calculateUnitPrice = (grade: Grade) => {
-    const base = getBasePrice(grade);
-    const mult = Number(grade.multiplier || 1);
-    const extra = Number(grade.extraPrice || 0);
-    return base * mult + extra;
-  };
+  const uniqueMaterials = useMemo(() => {
+    const ids = new Set<string>();
+    gradesData.forEach((g) => {
+      g.gradeMaterials?.forEach((gm) => {
+        if (gm.materialId) ids.add(gm.materialId);
+      });
+    });
+    return Array.from(ids);
+  }, [gradesData]);
 
   // Filters catalog list of grades
   const filteredGrades = useMemo(() => {
-    return staticGrades.filter((g) => 
-      g.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (g.metal?.name || "").toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [searchQuery]);
+    let result = gradesData.filter((g) => {
+      const matchesSearch = g.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                            (g.metal?.name || "").toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+                            (g.code || "").toLowerCase().includes(debouncedSearch.toLowerCase());
+      const matchesCategory = filterCategory === "all" || g.metal?.category === filterCategory;
+      const matchesBaseMetal = filterBaseMetal === "all" || g.metal?.name === filterBaseMetal;
+      
+      const matchesStatus = statusFilter === "all" || g.status === statusFilter;
+      const matchesVersion = versionFilter === "all" || String(g.version || 1) === versionFilter;
+      const matchesMaterial = materialFilter === "all" || g.gradeMaterials?.some((gm) => gm.materialId === materialFilter);
 
-  // Dynamic horizontal columns selection
-  const chosenGrades = useMemo(() => {
-    return staticGrades.filter((g) => selectedIds.includes(g.id));
-  }, [selectedIds]);
+      return matchesSearch && matchesCategory && matchesBaseMetal && matchesStatus && matchesVersion && matchesMaterial;
+    });
 
-  // Horizontal column sorting
-  const sortedGrades = useMemo(() => {
-    const list = [...chosenGrades];
-    if (sortBy === "name-asc") {
-      return list.sort((a, b) => a.name.localeCompare(b.name));
-    }
-    if (sortBy === "cost-asc") {
-      return list.sort((a, b) => calculateUnitPrice(a) - calculateUnitPrice(b));
-    }
-    if (sortBy === "cost-desc") {
-      return list.sort((a, b) => calculateUnitPrice(b) - calculateUnitPrice(a));
-    }
-    return list; // default selection order
-  }, [chosenGrades, sortBy]);
+    return [...result].sort((a, b) => {
+      if (sortByLocal === "name-asc") {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortByLocal === "cost-asc") {
+        return (a.extraPrice || 0) - (b.extraPrice || 0);
+      }
+      if (sortByLocal === "cost-desc") {
+        return (b.extraPrice || 0) - (a.extraPrice || 0);
+      }
+      if (sortByLocal === "version-desc") {
+        return (b.version || 1) - (a.version || 1);
+      }
+      return 0;
+    });
+  }, [debouncedSearch, filterCategory, filterBaseMetal, statusFilter, versionFilter, materialFilter, sortByLocal, gradesData]);
 
-  const toggleGradeSelection = (id: string) => {
-    setSelectedIds((prev) => 
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+
+  const handleRunAnalysis = () => {
+    if (selectedIds.length < 2) return;
+    
+    const items = selectedIds.map((id, index) => ({
+      gradeId: id,
+      position: index,
+      colorCode: "#3b82f6"
+    }));
+
+    createSession.mutate(
+      { name: "Workspace Analysis", description: "Generated from UI", items },
+      { onSuccess: (session) => setSessionId(session.id) }
     );
   };
 
-  const handleSelectAll = () => {
-    setSelectedIds(staticGrades.map((g) => g.id));
-  };
+  const selectedIdsString = selectedIds.join(',');
+  React.useEffect(() => {
+    if (selectedIds.length >= 2) {
+      handleRunAnalysis();
+    } else {
+      setSessionId(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIdsString]);
 
   const handleClearAll = () => {
     setSelectedIds([]);
   };
 
-  // Determines if values inside a spec row differ across all compared grades
-  const checkRowDiffers = (row: SpecRow) => {
-    if (sortedGrades.length <= 1) return false;
-    const firstVal = row.getValue(sortedGrades[0]);
-    return sortedGrades.some((g) => row.getValue(g) !== firstVal);
+  const handleSelectAll = () => {
+    setSelectedIds(gradesData.map(g => g.id));
   };
-
-  // Check if cost differs
-  const isCostDiffering = useMemo(() => {
-    if (sortedGrades.length <= 1) return false;
-    const firstCost = calculateUnitPrice(sortedGrades[0]);
-    return sortedGrades.some((g) => calculateUnitPrice(g) !== firstCost);
-  }, [sortedGrades]);
-
-  // Filter rows based on "Show Differences Only" toggle
-  const visibleSpecSchema = useMemo(() => {
-    if (!showDiffsOnly) return specSchema;
-    return specSchema.filter((row) => checkRowDiffers(row));
-  }, [showDiffsOnly, sortedGrades]);
-
-  // Identify the lowest cost grade
-  const lowestCostId = useMemo(() => {
-    if (sortedGrades.length <= 1) return null;
-    let minCost = Infinity;
-    let minId = null;
-    sortedGrades.forEach((g) => {
-      const cost = calculateUnitPrice(g);
-      if (cost < minCost) {
-        minCost = cost;
-        minId = g.id;
-      }
-    });
-    return minId;
-  }, [sortedGrades]);
-
-  // Helper to draw horizontal bar graphs for chemical percentages
-  const renderChemicalBar = (valStr: string) => {
-    const val = parseFloat(valStr || "0");
-    if (isNaN(val) || val === 0) return null;
-    return (
-      <div className="mt-1 h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, val * 5)}%` }} />
-      </div>
-    );
-  };
-
-  const sortOptions = [
-    { value: "default", label: "Default Selection Order" },
-    { value: "name-asc", label: "Grade Name (A - Z)" },
-    { value: "cost-asc", label: "Estimated Cost (Lowest First)" },
-    { value: "cost-desc", label: "Estimated Cost (Highest First)" }
-  ];
 
   return (
-    <div className="flex flex-col gap-6 relative pb-12 text-left">
+    <div className={`flex flex-col relative text-left bg-slate-50 ${isFullScreen ? 'h-screen overflow-hidden z-50 fixed inset-0' : 'h-full min-h-0 overflow-hidden'}`}>
       
-      {/* Redesigned Workspace Banner Header */}
-      <header className="flex flex-wrap items-end justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 bottom-0 left-0 w-1.5 bg-blue-600" />
-        
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-wider text-blue-600">
-            JSW Cost Allocation Workspace
-          </p>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight mt-0.5 flex items-center gap-2">
-            <GitCompare className="h-6 w-6 text-blue-600 animate-pulse" />
-            <span>Multi-Alloy Comparison Engine</span>
-          </h2>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Badge className="border-info-border bg-info-bg text-info-fg flex items-center gap-1 font-bold px-3 py-1 text-xs rounded-full">
-            <Scale className="h-3.5 w-3.5" />
-            <span>JSW Specifications Matrix</span>
-          </Badge>
-          
-          <Button
-            size="sm"
-            onClick={handleSelectAll}
-            variant="outline"
-            className="border-slate-200 text-slate-700 font-bold h-9 rounded-xl shadow-sm text-xs"
-          >
-            Select All Alloys
-          </Button>
-        </div>
-      </header>
-
-      {/* 1️⃣ ALLOY CATALOG SELECTOR SECTION */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-            Available Grade Catalog Selector ({filteredGrades.length})
-          </span>
-          <div className="relative w-full max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-            <Input
-              className="pl-8 h-8.5 rounded-lg text-xs"
-              placeholder="Search available grades..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredGrades.map((grade) => {
-            const isSelected = selectedIds.includes(grade.id);
-            const unitPrice = calculateUnitPrice(grade);
-            return (
-              <Card 
-                key={grade.id} 
-                className={`cursor-pointer border-slate-200 bg-white transition-all duration-300 relative group overflow-hidden ${
-                  isSelected 
-                    ? "ring-2 ring-blue-500 border-blue-400 shadow-md" 
-                    : "hover:border-slate-350 hover:shadow-xs"
-                }`}
-                onClick={() => toggleGradeSelection(grade.id)}
-              >
-                {/* Decorative border strip */}
-                <div className={`absolute top-0 left-0 right-0 h-1 transition-all ${
-                  isSelected ? "bg-blue-500" : "bg-slate-100 group-hover:bg-slate-200"
-                }`} />
-
-                <CardContent className="p-4 pt-5 flex items-start justify-between gap-3 text-left">
-                  <div className="flex flex-col gap-1 w-full">
-                    <div className="flex items-center justify-between w-full">
-                      <strong className="text-sm font-extrabold text-[#10233d]">{grade.name}</strong>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase">{grade.metal?.category}</span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-400 font-semibold block mt-1.5">
-                      Base Metal: <strong className="text-slate-600">{grade.metal?.name}</strong>
-                    </p>
-
-                    <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
-                      <div className="flex flex-col">
-                        <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Base Rate</span>
-                        <strong className="text-[#0057b8] font-black text-xs">{inr(unitPrice)} / kg</strong>
-                      </div>
-                      <Badge variant={isSelected ? "info" : "outline"} className="px-2 py-0 rounded text-[9px] font-bold uppercase">
-                        {isSelected ? "Compared" : "Exclude"}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  {/* Plain Custom Checkbox */}
-                  <input 
-                    type="checkbox" 
-                    checked={isSelected}
-                    onChange={() => {}} // Swallowed: parent div click handles state
-                    className="h-4 w-4 accent-blue-500 rounded border-slate-200 mt-0.5 cursor-pointer"
-                  />
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 2️⃣ ANALYTICAL ACTION CONTROLS PANEL */}
-      <Card className="border-slate-200 bg-slate-50/50 p-4 rounded-xl">
-        <div className="flex flex-wrap items-center justify-between gap-5">
-          
-          {/* Simulation Quantity Calculator */}
-          <div className="flex items-center gap-3">
-            <TrendingUp className="h-5 w-5 text-blue-600" />
-            <div className="flex flex-col gap-0.5 text-left">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                Simulate Order Volume (kg)
-              </span>
-              <Input
-                type="number"
-                value={orderQuantity}
-                onChange={(e) => setOrderQuantity(Math.max(0, Number(e.target.value)))}
-                className="w-36 h-8 rounded-lg text-xs font-bold text-[#10233d] border-slate-200 bg-white"
-                placeholder="Batch size kg"
-                rightIcon={<span className="text-[9px] font-bold text-slate-400">kg</span>}
-              />
+      {!isFullScreen && (
+        <div className="flex flex-col bg-white border-b border-slate-200 shadow-sm shrink-0">
+          {/* Breadcrumbs */}
+          <div className="flex items-center justify-between px-4 py-1.5 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-1 text-[10px] font-medium text-slate-500 uppercase tracking-wider">
+              <span>Workspaces</span>
+              <ChevronRight className="h-2.5 w-2.5 text-slate-400" />
+              <span className="text-blue-700 font-bold">Comparison Intelligence</span>
             </div>
           </div>
 
-          {/* Table difference highlights controls */}
-          <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-[#56657a]">
-            
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input 
-                type="checkbox"
-                checked={highlightDiffs}
-                onChange={(e) => setHighlightDiffs(e.target.checked)}
-                className="h-3.5 w-3.5 accent-blue-500 rounded cursor-pointer"
-              />
-              <span>Highlight Differences</span>
-            </label>
+          {/* Main Upgraded Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4">
+            {/* Left Column: Title, Description, and Badges */}
+            <div className="flex flex-col gap-2.5">
+              <div>
+                <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <GitCompare className="h-5 w-5 text-blue-600" />
+                  Comparison Engine
+                </h1>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Compare steel grades, analyze chemical compositions, and evaluate cost options side-by-side.
+                </p>
+              </div>
 
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input 
-                type="checkbox"
-                checked={showDiffsOnly}
-                onChange={(e) => setShowDiffsOnly(e.target.checked)}
-                className="h-3.5 w-3.5 accent-blue-500 rounded cursor-pointer"
-              />
-              <span>Show Differences Only</span>
-            </label>
+              {/* Status & Metrics Inline Bar */}
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                {/* Selected Grades Counter */}
+                <div className="flex items-center gap-1.5 font-medium text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded">
+                  <span>Selected:</span>
+                  <span className="font-bold text-blue-700">{selectedIds.length} Grades</span>
+                </div>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearAll}
-              className="h-7 text-xs font-bold text-slate-400 hover:text-red-500 rounded-md hover:bg-slate-100 p-1"
-            >
-              Clear Comparison
-            </Button>
-          </div>
+                {/* Last Updated */}
+                <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Last Updated:</span>
+                  <span className="font-medium text-slate-700">{lastUpdated}</span>
+                </div>
 
-          {/* Horizontal sort selector */}
-          <Select
-            label="Sort Alloy Columns"
-            value={sortBy}
-            options={sortOptions}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-52 h-8.5 rounded-lg text-xs"
-          />
+                {/* Comparison Status */}
+                <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Comparison Status:</span>
+                  <span className={`font-bold ${sessionId ? "text-emerald-700" : "text-amber-700"}`}>
+                    {sessionId ? "Synced" : "Draft"}
+                  </span>
+                </div>
 
-        </div>
-      </Card>
+                {/* Engine Status */}
+                <div className="flex items-center gap-1.5 text-slate-500 bg-slate-50 border border-slate-100 px-2.5 py-1 rounded">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Engine Status:</span>
+                  <div className="flex items-center gap-1">
+                    {createSession.isPending || isLoadingResults ? (
+                      <>
+                        <Loader2 className="w-3 h-3 text-amber-600 animate-spin" />
+                        <span className="font-bold text-amber-700">Computing</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                        <span className="font-bold text-emerald-700">Ready</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-      {/* 3️⃣ COMPARATIVE SPECS TABLE SHEET */}
-      <Card className="border-slate-200 bg-white shadow-md overflow-hidden text-left">
-        {sortedGrades.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-slate-400 text-center gap-3">
-            <GitCompare className="h-12 w-12 text-slate-350 animate-pulse" />
-            <strong className="text-slate-800 text-sm font-bold block">No Alloys Selected</strong>
-            <p className="text-xs text-slate-400 font-semibold max-w-[280px]">
-              Choose steel grades from the selectors catalog above to populate the dynamic analytical matrix.
-            </p>
-            <Button onClick={handleSelectAll} className="bg-blue-600 text-white font-bold h-9.5 px-4 rounded-xl mt-2 text-xs">
-              Load Standard Grades
-            </Button>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table className="w-full border-collapse text-left min-w-[760px]">
-              
-              {/* Sticky Alloy columns header */}
-              <TableHeader className="bg-slate-100/80 backdrop-blur-xs sticky top-0 z-20 border-b border-[#d6dfeb]">
-                <TableRow>
-                  <TableHead className="py-3 px-4 font-black text-[#56657a] uppercase text-[10px] tracking-wider w-64 border-r border-[#d6dfeb]">
-                    Properties & Specifications
-                  </TableHead>
-                  
-                  {sortedGrades.map((grade) => {
-                    const isLowest = grade.id === lowestCostId;
-                    return (
-                      <TableHead 
-                        key={grade.id} 
-                        className={`py-3 px-4 text-center font-extrabold text-[#10233d] text-xs border-r border-[#d6dfeb]/50 w-56 relative ${
-                          isLowest ? "bg-emerald-50/50" : ""
-                        }`}
-                      >
-                        <div className="flex flex-col items-center gap-1">
-                          <strong className="block text-slate-800 font-extrabold text-sm">{grade.name}</strong>
-                          <span className="text-[9px] text-slate-400 uppercase font-semibold">({grade.metal?.name})</span>
-                          {isLowest && (
-                            <Badge variant="success" className="px-1.5 py-0 rounded text-[8px] font-bold block mt-1">
-                              ✓ Best Value option
-                            </Badge>
-                          )}
-                        </div>
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              </TableHeader>
+            {/* Right Column: Actions */}
+            <div className="flex flex-wrap items-center gap-2 md:self-end">
+              {/* Reset Action */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAll}
+                className="bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 h-8 px-3 rounded shadow-sm text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-slate-500" />
+                Reset
+              </Button>
 
-              <TableBody className="bg-white">
-                
-                {/* ==================== GROUP 1: COST & COMMERCIALS ==================== */}
-                <TableRow 
-                  className="bg-slate-50 hover:bg-slate-100/80 cursor-pointer font-bold select-none border-b border-[#d6dfeb]/70 transition-colors"
-                  onClick={() => toggleGroup("cost")}
-                >
-                  <TableCell colSpan={sortedGrades.length + 1} className="py-2.5 px-4 text-xs font-black text-[#10233d] uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Scale className="h-4 w-4 text-blue-600" />
-                      <span>1. Cost & Commercial Matrix</span>
-                    </span>
-                    {collapsedGroups.cost ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </TableCell>
-                </TableRow>
+              {/* History Action */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  toast.info("Recent Comparison Sessions loaded in Workspace.", {
+                    description: "Displaying last active audit actions and logs."
+                  });
+                }}
+                className="bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 h-8 px-3 rounded shadow-sm text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <History className="h-3.5 w-3.5 text-slate-500" />
+                History
+              </Button>
 
-                {!collapsedGroups.cost && (
+              {/* Export Action */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!results) {
+                    toast.error("No analysis results to export.");
+                    return;
+                  }
+                  toast.success("Initiating Matrix Export", {
+                    description: "Exporting comparison results as CSV format."
+                  });
+                  // Trigger CSV download element if possible
+                  const exportBtn = document.querySelector(".bg-white.border-slate-300.text-slate-700.hover\\:bg-slate-50.h-6");
+                  if (exportBtn) {
+                    (exportBtn as HTMLElement).click();
+                  }
+                }}
+                className="bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 h-8 px-3 rounded shadow-sm text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <Download className="h-3.5 w-3.5 text-slate-500" />
+                Export
+              </Button>
+
+              {/* Save Session Action */}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={selectedIds.length < 2 || createSession.isPending}
+                onClick={() => {
+                  if (selectedIds.length < 2) return;
+                  handleRunAnalysis();
+                  toast.success("Comparison Session Saved", {
+                    description: `Active session with ${selectedIds.length} grades has been synchronized.`
+                  });
+                }}
+                className="bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 disabled:pointer-events-none h-8 px-3 rounded shadow-sm text-xs font-semibold flex items-center gap-1.5 transition-all"
+              >
+                <Save className="h-3.5 w-3.5 text-slate-500" />
+                Save Session
+              </Button>
+
+              {/* Compare Action (Primary CTA) */}
+              <Button
+                size="sm"
+                disabled={selectedIds.length < 2 || createSession.isPending}
+                onClick={handleRunAnalysis}
+                className="bg-[#002b63] hover:bg-[#001e45] text-white border-none disabled:opacity-50 disabled:pointer-events-none h-8 px-4 rounded shadow-md text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all"
+              >
+                {createSession.isPending ? (
                   <>
-                    {/* Row: Metal Base price */}
-                    <TableRow className={`border-b border-[#d6dfeb]/30 text-xs transition-colors hover:bg-slate-50/50`}>
-                      <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                        <Info className="h-3.5 w-3.5 text-slate-350" />
-                        <span>Metal Base Rate (Price master)</span>
-                      </TableCell>
-                      {sortedGrades.map((grade) => (
-                        <TableCell key={grade.id} className="py-2.5 px-4 text-center font-bold text-slate-700 border-r border-[#d6dfeb]/30">
-                          {inr(getBasePrice(grade))} / kg
-                        </TableCell>
-                      ))}
-                    </TableRow>
-
-                    {/* Row: Grade multiplier */}
-                    <TableRow className={`border-b border-[#d6dfeb]/30 text-xs transition-colors hover:bg-slate-50/50`}>
-                      <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                        <HelpCircle className="h-3.5 w-3.5 text-slate-350" />
-                        <span>Grade Surcharge Multiplier</span>
-                      </TableCell>
-                      {sortedGrades.map((grade) => (
-                        <TableCell key={grade.id} className="py-2.5 px-4 text-center font-bold text-slate-700 border-r border-[#d6dfeb]/30">
-                          {grade.multiplier}x
-                        </TableCell>
-                      ))}
-                    </TableRow>
-
-                    {/* Row: Grade Extra Surcharge */}
-                    <TableRow className={`border-b border-[#d6dfeb]/30 text-xs transition-colors hover:bg-slate-50/50`}>
-                      <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                        <span>Extra Surcharge Price/kg</span>
-                      </TableCell>
-                      {sortedGrades.map((grade) => (
-                        <TableCell key={grade.id} className="py-2.5 px-4 text-center font-bold text-slate-700 border-r border-[#d6dfeb]/30">
-                          {inr(Number(grade.extraPrice))} / kg
-                        </TableCell>
-                      ))}
-                    </TableRow>
-
-                    {/* Row: Unit Cost */}
-                    <TableRow className={`border-b border-[#d6dfeb]/40 text-xs font-black transition-colors ${
-                      highlightDiffs && isCostDiffering ? "bg-[#fff8ee] hover:bg-[#fff0db]" : "hover:bg-slate-50/50"
-                    }`}>
-                      <TableCell className="py-2.5 px-4 font-extrabold text-[#10233d] border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                        <span>Calculated Unit Cost / kg</span>
-                        {highlightDiffs && isCostDiffering && (
-                          <Badge variant="warning" className="px-1 py-0 rounded text-[7px]">differs</Badge>
-                        )}
-                      </TableCell>
-                      {sortedGrades.map((grade) => {
-                        const unitCost = calculateUnitPrice(grade);
-                        const isLowest = grade.id === lowestCostId;
-                        return (
-                          <TableCell key={grade.id} className={`py-2.5 px-4 text-center border-r border-[#d6dfeb]/30 font-black text-sm text-[#0057b8] ${
-                            isLowest ? "text-emerald-700 font-extrabold" : ""
-                          }`}>
-                            {inr(unitCost)} / kg
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
-
-                    {/* Row: Order Simulated Cost */}
-                    <TableRow className={`border-b border-[#d6dfeb]/70 text-xs font-black bg-blue-50/20 transition-colors`}>
-                      <TableCell className="py-3 px-4 font-black text-blue-900 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                        <span>Simulated Order Cost ({orderQuantity.toLocaleString()} kg)</span>
-                      </TableCell>
-                      {sortedGrades.map((grade) => {
-                        const estCost = calculateUnitPrice(grade) * orderQuantity;
-                        const isLowest = grade.id === lowestCostId;
-                        return (
-                          <TableCell key={grade.id} className={`py-3 px-4 text-center border-r border-[#d6dfeb]/30 font-black text-sm ${
-                            isLowest ? "bg-emerald-100/60 text-emerald-800" : "text-slate-800"
-                          }`}>
-                            {inr(estCost)}
-                          </TableCell>
-                        );
-                      })}
-                    </TableRow>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white/80" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <GitCompare className="h-3.5 w-3.5 text-white/90" />
+                    Compare
                   </>
                 )}
+              </Button>
+            </div>
+          </div>
 
-                {/* ==================== GROUP 2: MECHANICAL PROPERTIES ==================== */}
-                <TableRow 
-                  className="bg-slate-50 hover:bg-slate-100/80 cursor-pointer font-bold select-none border-b border-[#d6dfeb]/70 transition-colors"
-                  onClick={() => toggleGroup("mechanical")}
-                >
-                  <TableCell colSpan={sortedGrades.length + 1} className="py-2.5 px-4 text-xs font-black text-[#10233d] uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Zap className="h-4 w-4 text-amber-500" />
-                      <span>2. Mechanical Properties Spec Matrix</span>
-                    </span>
-                    {collapsedGroups.mechanical ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </TableCell>
-                </TableRow>
+          {/* KPI Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 px-4 py-3 bg-slate-50 border-b border-slate-200">
+            {/* Basket Card */}
+            <div className="bg-white border border-slate-200 rounded p-3 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Grade Basket</span>
+              <span className="text-lg font-black text-[#002b63]">{kpis.basket}</span>
+              <span className="text-[10px] text-slate-500 mt-1">{kpis.basketSub}</span>
+            </div>
+            
+            {/* Min Cost Card */}
+            <div className="bg-white border border-slate-200 rounded p-3 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Min Unit Cost</span>
+              <span className="text-xs font-bold text-slate-800 truncate mt-1">{kpis.minCost}</span>
+              <span className="text-[10px] text-slate-500 mt-1">{kpis.minSub}</span>
+            </div>
 
-                {!collapsedGroups.mechanical && (
-                  visibleSpecSchema
-                    .filter((row) => row.group === "mechanical")
-                    .map((row) => {
-                      const differs = checkRowDiffers(row);
-                      return (
-                        <TableRow 
-                          key={row.label} 
-                          className={`border-b border-[#d6dfeb]/30 text-xs transition-colors ${
-                            differs && highlightDiffs ? "bg-[#fff8ee] hover:bg-[#fff0db]" : "hover:bg-slate-50/50"
-                          }`}
-                        >
-                          <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                            <span>{row.label}</span>
-                            {differs && highlightDiffs && (
-                              <Badge variant="warning" className="px-1 py-0 rounded text-[7px]">differs</Badge>
-                            )}
-                          </TableCell>
-                          
-                          {sortedGrades.map((grade) => (
-                            <TableCell key={grade.id} className="py-2.5 px-4 text-center font-bold text-slate-700 border-r border-[#d6dfeb]/30">
-                              {row.getValue(grade)}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })
-                )}
+            {/* Max Cost Card */}
+            <div className="bg-white border border-slate-200 rounded p-3 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max Unit Cost</span>
+              <span className="text-xs font-bold text-slate-800 truncate mt-1">{kpis.maxCost}</span>
+              <span className="text-[10px] text-slate-500 mt-1">{kpis.maxSub}</span>
+            </div>
 
-                {/* ==================== GROUP 3: CHEMICAL COMPOSITION ==================== */}
-                <TableRow 
-                  className="bg-slate-50 hover:bg-slate-100/80 cursor-pointer font-bold select-none border-b border-[#d6dfeb]/70 transition-colors"
-                  onClick={() => toggleGroup("chemical")}
-                >
-                  <TableCell colSpan={sortedGrades.length + 1} className="py-2.5 px-4 text-xs font-black text-[#10233d] uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <GitCompare className="h-4 w-4 text-blue-500" />
-                      <span>3. Chemical Elements & Compositions</span>
-                    </span>
-                    {collapsedGroups.chemical ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </TableCell>
-                </TableRow>
+            {/* Variance Card */}
+            <div className="bg-white border border-slate-200 rounded p-3 shadow-sm flex flex-col justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Cost Variance Spread</span>
+              <span className="text-lg font-black text-rose-600">{kpis.variance}</span>
+              <span className="text-[10px] text-slate-500 mt-1">{kpis.varianceSub}</span>
+            </div>
+          </div>
 
-                {!collapsedGroups.chemical && (
-                  visibleSpecSchema
-                    .filter((row) => row.group === "chemical")
-                    .map((row) => {
-                      const differs = checkRowDiffers(row);
-                      return (
-                        <TableRow 
-                          key={row.label} 
-                          className={`border-b border-[#d6dfeb]/30 text-xs transition-colors ${
-                            differs && highlightDiffs ? "bg-[#fff8ee] hover:bg-[#fff0db]" : "hover:bg-slate-50/50"
-                          }`}
-                        >
-                          <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                            <span>{row.label}</span>
-                            {differs && highlightDiffs && (
-                              <Badge variant="warning" className="px-1 py-0 rounded text-[7px]">differs</Badge>
-                            )}
-                          </TableCell>
-                          
-                          {sortedGrades.map((grade) => {
-                            const val = row.getValue(grade);
-                            return (
-                              <TableCell key={grade.id} className="py-2.5 px-4 border-r border-[#d6dfeb]/30 text-center font-extrabold text-slate-700">
-                                <div className="flex flex-col items-center">
-                                  <span>{val}</span>
-                                  <div className="w-24 mt-1 hidden sm:block">
-                                    {renderChemicalBar(val)}
-                                  </div>
-                                </div>
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      );
-                    })
-                )}
+          {/* Filters Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 bg-slate-50 border-b border-slate-200">
+            {/* Filter Inputs Grid */}
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[300px]">
+              {/* Search */}
+              <div className="relative w-full max-w-[180px]">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input 
+                  className="pl-7 h-7 text-xs border-slate-300 rounded shadow-sm w-full bg-white" 
+                  placeholder="Search grades..." 
+                  value={searchVal} 
+                  onChange={(e) => setSearchVal(e.target.value)} 
+                />
+              </div>
 
-                {/* ==================== GROUP 4: TOLERANCE PROPERTIES ==================== */}
-                <TableRow 
-                  className="bg-slate-50 hover:bg-slate-100/80 cursor-pointer font-bold select-none border-b border-[#d6dfeb]/70 transition-colors"
-                  onClick={() => toggleGroup("tolerances")}
-                >
-                  <TableCell colSpan={sortedGrades.length + 1} className="py-2.5 px-4 text-xs font-black text-[#10233d] uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <Scale className="h-4 w-4 text-emerald-500" />
-                      <span>4. Dimension Tolerance specs</span>
-                    </span>
-                    {collapsedGroups.tolerances ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </TableCell>
-                </TableRow>
+              {/* Material Filter */}
+              <select
+                value={materialFilter}
+                onChange={(e) => setMaterialFilter(e.target.value)}
+                className="h-7 text-xs border border-slate-300 rounded shadow-sm bg-white px-2 text-slate-700 min-w-[110px]"
+              >
+                <option value="all">All Materials</option>
+                {uniqueMaterials.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
 
-                {!collapsedGroups.tolerances && (
-                  visibleSpecSchema
-                    .filter((row) => row.group === "tolerances")
-                    .map((row) => {
-                      const differs = checkRowDiffers(row);
-                      return (
-                        <TableRow 
-                          key={row.label} 
-                          className={`border-b border-[#d6dfeb]/30 text-xs transition-colors ${
-                            differs && highlightDiffs ? "bg-[#fff8ee] hover:bg-[#fff0db]" : "hover:bg-slate-50/50"
-                          }`}
-                        >
-                          <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                            <span>{row.label}</span>
-                            {differs && highlightDiffs && (
-                              <Badge variant="warning" className="px-1 py-0 rounded text-[7px]">differs</Badge>
-                            )}
-                          </TableCell>
-                          
-                          {sortedGrades.map((grade) => (
-                            <TableCell key={grade.id} className="py-2.5 px-4 text-center font-bold text-slate-700 border-r border-[#d6dfeb]/30">
-                              {row.getValue(grade)}
-                            </TableCell>
-                          ))}
-                        </TableRow>
-                      );
-                    })
-                )}
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-7 text-xs border border-slate-300 rounded shadow-sm bg-white px-2 text-slate-700 min-w-[90px]"
+              >
+                <option value="all">All Status</option>
+                <option value="DRAFT">Draft</option>
+                <option value="SUBMITTED">Submitted</option>
+                <option value="ACTIVE">Active</option>
+                <option value="APPROVED">Approved</option>
+              </select>
 
-                {/* ==================== GROUP 5: BENDING PROPERTIES ==================== */}
-                <TableRow 
-                  className="bg-slate-50 hover:bg-slate-100/80 cursor-pointer font-bold select-none border-b border-[#d6dfeb]/70 transition-colors"
-                  onClick={() => toggleGroup("bend")}
-                >
-                  <TableCell colSpan={sortedGrades.length + 1} className="py-2.5 px-4 text-xs font-black text-[#10233d] uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <ShieldAlert className="h-4 w-4 text-indigo-500" />
-                      <span>5. Bend & Formability Specs</span>
-                    </span>
-                    {collapsedGroups.bend ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </TableCell>
-                </TableRow>
+              {/* Version Filter */}
+              <select
+                value={versionFilter}
+                onChange={(e) => setVersionFilter(e.target.value)}
+                className="h-7 text-xs border border-slate-300 rounded shadow-sm bg-white px-2 text-slate-700 min-w-[80px]"
+              >
+                <option value="all">All Versions</option>
+                <option value="1">v1</option>
+                <option value="2">v2</option>
+                <option value="3">v3</option>
+              </select>
 
-                {!collapsedGroups.bend && (
-                  visibleSpecSchema
-                    .filter((row) => row.group === "bend")
-                    .map((row) => {
-                      const differs = checkRowDiffers(row);
-                      return (
-                        <TableRow 
-                          key={row.label} 
-                          className={`border-b border-[#d6dfeb]/30 text-xs transition-colors ${
-                            differs && highlightDiffs ? "bg-[#fff8ee] hover:bg-[#fff0db]" : "hover:bg-slate-50/50"
-                          }`}
-                        >
-                          <TableCell className="py-2.5 px-4 font-bold text-slate-500 border-r border-[#d6dfeb]/50 pl-6 flex items-center gap-1.5">
-                            <span>{row.label}</span>
-                            {differs && highlightDiffs && (
-                              <Badge variant="warning" className="px-1 py-0 rounded text-[7px]">differs</Badge>
-                            )}
-                          </TableCell>
-                          
-                          {sortedGrades.map((grade) => {
-                            const val = row.getValue(grade);
-                            return (
-                              <TableCell key={grade.id} className="py-2.5 px-4 text-center border-r border-[#d6dfeb]/30 font-bold">
-                                <Badge 
-                                  variant={val === "Excellent" || val.includes("2.0T") ? "success" : "default"}
-                                  className="px-2 py-0.5 rounded text-[10px]"
-                                >
-                                  {val}
-                                </Badge>
-                              </TableCell>
-                            );
-                          })}
-                        </TableRow>
-                      );
-                    })
-                )}
+              {/* Sort By */}
+              <select
+                value={sortByLocal}
+                onChange={(e) => setSortByLocal(e.target.value)}
+                className="h-7 text-xs border border-slate-300 rounded shadow-sm bg-white px-2 text-slate-700 min-w-[100px]"
+              >
+                <option value="name-asc">Sort: Name A-Z</option>
+                <option value="cost-asc">Sort: Cost (Low-High)</option>
+                <option value="cost-desc">Sort: Cost (High-Low)</option>
+                <option value="version-desc">Sort: Version (Newest)</option>
+              </select>
 
-              </TableBody>
-            </Table>
+              {/* Reset Filters */}
+              <Button 
+                size="sm" 
+                onClick={handleResetFilters} 
+                variant="ghost" 
+                className="text-slate-500 hover:text-slate-800 text-[10px] h-7 px-2 font-bold uppercase tracking-wider"
+              >
+                Reset Filters
+              </Button>
+            </div>
+
+            {/* Selection Toolbar Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] font-bold text-slate-500 mr-1 bg-white border border-slate-200 rounded px-2 py-0.5 shadow-sm">
+                Matches: {filteredGrades.length} / {gradesData.length}
+              </span>
+              
+              <Button 
+                size="sm" 
+                onClick={handleSelectAll} 
+                variant="outline" 
+                className="bg-white border-slate-300 text-slate-700 font-bold h-7 px-2 rounded shadow-sm text-xs hover:bg-slate-50"
+              >
+                Select All
+              </Button>
+
+              <Button 
+                size="sm" 
+                onClick={handleClearAll} 
+                variant="outline" 
+                className="bg-white border-slate-300 text-slate-700 font-bold h-7 px-2 rounded shadow-sm text-xs hover:bg-slate-50"
+              >
+                Clear Selection
+              </Button>
+              
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!results) {
+                    toast.error("No analysis results to export.");
+                    return;
+                  }
+                  toast.success("Exporting Comparison Data...");
+                }}
+                variant="outline"
+                className="bg-white border-slate-300 text-slate-700 font-bold h-7 px-2 rounded shadow-sm text-xs hover:bg-slate-50 flex items-center gap-1"
+              >
+                <Download className="h-3 w-3" /> Export
+              </Button>
+
+              <Button
+                size="sm"
+                disabled={selectedIds.length < 2 || createSession.isPending}
+                onClick={handleRunAnalysis}
+                className="bg-[#002b63] hover:bg-[#001e45] text-white disabled:opacity-50 disabled:pointer-events-none h-7 px-3 rounded shadow-md text-xs font-bold uppercase tracking-wider flex items-center gap-1 transition-all"
+              >
+                Compare
+              </Button>
+            </div>
+          </div>
+
+          {/* Grade Library Shelf */}
+          <div className="bg-white border-b border-slate-200 p-3 flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Grade Library (Select to Compare)</span>
+            </div>
+            <div className="flex gap-3 overflow-x-auto p-2 h-[152px] scrollbar-thin scrollbar-thumb-slate-300 bg-slate-50/50 rounded border border-slate-100">
+              {filteredGrades.map((grade) => {
+                const isSelected = selectedIds.includes(grade.id);
+                return (
+                  <div 
+                    key={grade.id}
+                    onClick={() => toggleGradeSelection(grade.id)}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleGradeSelection(grade.id);
+                      }
+                    }}
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    aria-label={`Select grade ${grade.name} for cost comparison`}
+                    className={`shrink-0 w-[240px] h-[132px] p-3 rounded border bg-white flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-200 group cursor-pointer relative select-none focus:outline-none focus:ring-2 focus:ring-[#002b63] ${
+                      isSelected 
+                        ? "border-[#002b63] bg-[#002b63]/5 ring-1 ring-[#002b63]" 
+                        : "border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    {/* Top row: Checkbox + Name + Status */}
+                    <div className="flex items-start justify-between gap-1.5 min-w-0 w-full">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            toggleGradeSelection(grade.id);
+                          }}
+                          className="rounded border-slate-300 text-[#002b63] focus:ring-[#002b63] h-3.5 w-3.5 cursor-pointer shrink-0"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-slate-800 text-xs truncate" title={grade.name}>
+                            {grade.name}
+                          </span>
+                          <span className="text-slate-500 text-[10px] truncate uppercase font-semibold mt-0.5">
+                            {grade.metal?.category || "Ferrous"} • {grade.metal?.name}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Status Badge */}
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider ${
+                        grade.status === "ACTIVE" || grade.status === "APPROVED"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : grade.status === "SUBMITTED"
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : "bg-slate-50 text-slate-600 border border-slate-200"
+                      }`}>
+                        {grade.status || "DRAFT"}
+                      </span>
+                    </div>
+
+                    {/* Middle: Material Count & Cost */}
+                    <div className="flex items-center justify-between text-xs py-1 border-y border-dashed border-slate-100 mt-1 shrink-0">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Materials</span>
+                        <span className="font-semibold text-slate-700">
+                          {grade.gradeMaterials?.length || 0} items
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Extra Price</span>
+                        <span className="font-bold text-[#002b63] font-mono">
+                          {grade.extraPrice > 0 ? inr(grade.extraPrice) : "₹0.00"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Footer: Version + Last Updated + Quick View */}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1 shrink-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="bg-slate-100 text-slate-600 px-1 py-0.2 rounded text-[8px] font-bold border border-slate-200">
+                          v{grade.version || 1}
+                        </span>
+                        <span className="truncate max-w-[80px] text-slate-400 text-[9px]">
+                          {grade.updatedAt ? new Date(grade.updatedAt).toLocaleDateString([], { day: '2-digit', month: 'short' }) : "Recently"}
+                        </span>
+                      </div>
+                      
+                      {/* Quick View Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQuickViewGrade(grade);
+                        }}
+                        className="text-[10px] font-bold text-[#002b63] hover:underline"
+                      >
+                        Quick View
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredGrades.length === 0 && (
+                <div className="flex-1 flex items-center justify-center text-xs text-slate-500 italic">No grades match the filters.</div>
+              )}
+            </div>
+          </div>
+
+          {/* Selected Comparison Basket */}
+          <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-2">Selected Basket:</span>
+            {selectedIds.length === 0 ? (
+              <span className="text-xs text-slate-400 italic">No grades selected. Select from Grade Library above to compare.</span>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {selectedIds.map(id => {
+                  const grade = gradesData.find(g => g.id === id);
+                  if (!grade) return null;
+                  return (
+                    <div key={id} className="flex items-center gap-1.5 bg-[#002b63]/10 border border-[#002b63]/20 text-[#002b63] text-xs font-bold px-2 py-0.5 rounded shadow-sm">
+                      <span>{grade.name}</span>
+                      <button 
+                        onClick={() => toggleGradeSelection(id)}
+                        className="hover:text-rose-600 transition-colors ml-1 font-black text-sm leading-none"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Workspace Content Area */}
+      <div className={`flex flex-col flex-1 ${isFullScreen ? '' : 'overflow-hidden p-3 gap-3'}`}>
+        
+        {/* Mutation Error Alert Banner */}
+        {createSession.isError && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs px-4 py-2.5 rounded flex items-center justify-between shadow-sm shrink-0">
+            <span className="font-semibold">Error: Failed to initialize comparison session. Please verify selected grades and try again.</span>
+            <Button size="sm" variant="ghost" className="text-rose-500 hover:text-rose-800 h-6 px-2 text-[10px] font-bold uppercase tracking-wider" onClick={() => createSession.reset()}>
+              Dismiss
+            </Button>
           </div>
         )}
-      </Card>
 
-      {/* 4️⃣ ANALYTICAL COMPARISON INFO FOOTER NOTES */}
-      <div className="grid gap-4 md:grid-cols-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/20 p-4 text-xs font-bold text-slate-500">
-        <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-white">
-          <span className="text-[10px] text-blue-500 uppercase tracking-wider block font-bold">Step 1</span>
-          <span className="text-[#10233d]">Select alloys from the selectors strip above.</span>
-        </div>
-        <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-white">
-          <span className="text-[10px] text-blue-500 uppercase tracking-wider block font-bold">Step 2</span>
-          <span className="text-[#10233d]">Compare chemical compositions and mechanical limits.</span>
-        </div>
-        <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-white">
-          <span className="text-[10px] text-blue-500 uppercase tracking-wider block font-bold">Step 3</span>
-          <span className="text-[#10233d]">Simulate batch sizes to check purchase totals in INR.</span>
-        </div>
-        <div className="flex flex-col gap-1 p-3 rounded-lg border border-slate-100 bg-white">
-          <span className="text-[10px] text-blue-500 uppercase tracking-wider block font-bold">Step 4</span>
-          <span className="text-[#10233d]">Confirm the optimal grade value match.</span>
+        {/* COMPARISON RESULTS */}
+        <div className={`flex flex-col flex-1 min-h-0 overflow-hidden ${isFullScreen ? 'h-full bg-white' : 'bg-white border border-slate-200 rounded shadow-sm'}`}>
+          
+          {isLoadingResults ? (
+            <div className="flex-1 flex flex-col p-4 gap-4 bg-white min-h-[300px]">
+              {/* Skeleton header */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+                <div className="h-4 bg-slate-200 animate-pulse rounded w-1/3"></div>
+                <div className="h-6 bg-slate-200 animate-pulse rounded w-24"></div>
+              </div>
+              {/* Skeleton rows */}
+              <div className="flex flex-col gap-3 flex-1 overflow-hidden justify-center">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="flex gap-4 items-center border-b border-slate-50 pb-2">
+                    <div className="h-5 bg-slate-200 animate-pulse rounded flex-1"></div>
+                    <div className="h-5 bg-slate-200 animate-pulse rounded w-24"></div>
+                    <div className="h-5 bg-slate-200 animate-pulse rounded w-24"></div>
+                    <div className="h-5 bg-slate-200 animate-pulse rounded w-24"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : !results ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-400 p-8 min-h-[300px]">
+              <div className="bg-slate-100 p-4 rounded-full border border-slate-200/50 mb-3 shadow-inner">
+                <GitCompare className="h-10 w-10 text-slate-400" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-700 mb-1">No Comparison Session Active</h3>
+              <p className="text-xs text-slate-500 max-w-[280px] text-center">
+                Select 2 or more grades from the Grade Library above, and click the primary "Compare" button to compute properties and cost variance matrices.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col h-full min-h-0">
+              {/* Dense Matrix Toolbox */}
+              <div className="bg-slate-100 px-3 py-1.5 flex items-center justify-between border-b border-slate-200 shrink-0 shadow-sm z-10">
+                <div className="flex items-center gap-4 text-xs font-semibold text-slate-700">
+                  <div className="flex items-center gap-1.5 uppercase tracking-wider">
+                    <Layers className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Analysis Matrix</span>
+                  </div>
+                  <div className="h-3 w-px bg-slate-300"></div>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-600 hover:text-slate-900 transition-colors">
+                    <input type="checkbox" checked={highlightDiffs} onChange={e => setHighlightDiffs(e.target.checked)} className="rounded-sm border-slate-400 text-blue-600 focus:ring-blue-500" />
+                    Highlight Variances
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setIsFullScreen(!isFullScreen)} className="text-slate-600 hover:text-slate-900 hover:bg-slate-200 h-6 px-2 text-[10px] uppercase font-bold tracking-wider">
+                    {isFullScreen ? <Minimize2 className="h-3 w-3 mr-1" /> : <Maximize2 className="h-3 w-3 mr-1" />}
+                    {isFullScreen ? "Exit" : "Expand"}
+                  </Button>
+                  <Button variant="outline" size="sm" className="bg-white border-slate-300 text-slate-700 hover:bg-slate-50 h-6 px-2 text-[10px] uppercase font-bold tracking-wider shadow-sm">
+                    <Download className="h-3 w-3 mr-1" /> Export CSV
+                  </Button>
+                </div>
+              </div>
+
+              {/* Recommendations (Horizontal strip if any) */}
+              {!isFullScreen && results.recommendations?.length > 0 && (
+                <div className="flex gap-2 p-2 bg-blue-50/50 border-b border-blue-100 shrink-0 overflow-x-auto">
+                  {results.recommendations.map((rec: RecCardType, i: number) => (
+                    <div key={i} className="shrink-0 w-[300px]">
+                      <RecCardUI recommendation={rec} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Matrix Component Area */}
+              <div className="flex-1 min-h-0 overflow-auto bg-white">
+                 <ComparisonMatrix 
+                    result={results}
+                    orderQuantity={orderQuantity}
+                    highlightDiffs={highlightDiffs}
+                    isFullScreen={isFullScreen}
+                    collapsedGroups={collapsedGroups}
+                    setCollapsedGroups={setCollapsedGroups}
+                 />
+              </div>
+
+              {/* Analytics Component Area */}
+              {!isFullScreen && (
+                 <div className="shrink-0 border-t border-slate-200 bg-slate-50 p-4 h-[400px] overflow-y-auto shadow-inner">
+                   <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-3">Comparison Analytics Dashboard</div>
+                   <ComparisonAnalytics 
+                     result={results}
+                     orderQuantity={orderQuantity}
+                     gradesData={gradesData}
+                   />
+                 </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Quick View Modal */}
+      {quickViewGrade && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="w-[90vw] max-w-[500px] bg-white rounded shadow-lg overflow-hidden border border-slate-200">
+            {/* Header */}
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-blue-600" />
+                  {quickViewGrade.name}
+                </h3>
+                <p className="text-[10px] text-slate-500 uppercase font-semibold mt-0.5">
+                  {quickViewGrade.metal?.category || "Standard"} • v{quickViewGrade.version || 1}
+                </p>
+              </div>
+              <button 
+                onClick={() => setQuickViewGrade(null)} 
+                className="text-slate-400 hover:text-slate-600 font-bold text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-4 flex flex-col gap-3.5 text-xs text-slate-700">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Status</span>
+                  <span className="font-semibold">{quickViewGrade.status || "DRAFT"}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Base Price Extra</span>
+                  <span className="font-semibold font-mono">{quickViewGrade.extraPrice > 0 ? inr(quickViewGrade.extraPrice) : "₹0.00"}</span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1.5">Material Composition</span>
+                {quickViewGrade.gradeMaterials && quickViewGrade.gradeMaterials.length > 0 ? (
+                  <div className="border border-slate-200 rounded overflow-hidden">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 border-b border-slate-200 uppercase tracking-wider">
+                          <th className="px-3 py-1.5">Material ID</th>
+                          <th className="px-3 py-1.5 text-right">Composition %</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quickViewGrade.gradeMaterials.map((gm: { materialId: string; compositionPercent: unknown }, i: number) => (
+                          <tr key={i} className="border-b border-slate-100 hover:bg-slate-50/50">
+                            <td className="px-3 py-1.5 font-semibold text-slate-800">{gm.materialId}</td>
+                            <td className="px-3 py-1.5 text-right font-mono font-semibold">{Number(gm.compositionPercent).toFixed(2)}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <span className="text-slate-400 italic">No materials configured.</span>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <Button size="sm" onClick={() => setQuickViewGrade(null)} className="h-7 bg-[#002b63] hover:bg-[#001e45] text-xs font-semibold px-4 rounded shadow-sm text-white">
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

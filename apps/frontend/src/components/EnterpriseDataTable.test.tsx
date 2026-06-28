@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EnterpriseDataTable, type EnterpriseColumnDef } from "./EnterpriseDataTable";
@@ -50,11 +50,13 @@ function Harness() {
 }
 
 describe("EnterpriseDataTable", () => {
-  it("updates search state and resets pagination", () => {
+  it("updates search state and resets pagination", async () => {
     render(<Harness />);
     fireEvent.change(screen.getByPlaceholderText("Search records..."), { target: { value: "steel" } });
-    expect(screen.getByTestId("query").textContent).toContain('"search":"steel"');
-    expect(screen.getByTestId("query").textContent).toContain('"page":1');
+    await waitFor(() => {
+      expect(screen.getByTestId("query").textContent).toContain('"search":"steel"');
+      expect(screen.getByTestId("query").textContent).toContain('"page":1');
+    });
   });
 
   it("updates server sort state from the column header", () => {

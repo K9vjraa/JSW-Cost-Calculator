@@ -1,3 +1,18 @@
 {
-    "prisma.pinToPrisma6": false
+    "prisma.pinToPrisma6": false,
+    "chat.mcp.serverSampling": {
+        "JSW-Metal Cost Management System/.mcp.json: supabase": {
+            "allowedModels": [
+                "copilotcli/auto",
+                "copilot/auto",
+                "claude-code/claude-haiku-4.5",
+                "copilotcli/claude-haiku-4.5",
+                "copilot/claude-haiku-4.5",
+                "copilotcli/gpt-5-mini",
+                "copilot/gpt-5-mini",
+                "copilot/mai-code-1-flash-picker",
+                "copilot/oswe-vscode-prime"
+            ]
+        }
+    }
 }

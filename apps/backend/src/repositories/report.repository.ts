@@ -126,7 +126,7 @@ export async function getPriceHistory(from: Date, to: Date) {
     where: { updatedAt: { gte: from, lte: to } },
     include: {
       metal: { select: { name: true, code: true } },
-      rawMaterial: { select: { name: true, code: true } },
+      rawMaterial: { select: { materialName: true, materialCode: true } },
       updatedBy: { select: { name: true } }
     },
     orderBy: { updatedAt: "desc" },
@@ -145,6 +145,6 @@ export async function getComparisonData() {
       }
     },
     take: 25,
-    orderBy: { updatedAt: "desc" }
+    orderBy: { name: "asc" }
   });
 }
