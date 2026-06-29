@@ -14,7 +14,9 @@ vi.mock("../src/config/env.js", () => {
       refreshSecret: "test-refresh-secret-length-must-be-long",
       accessTokenTtl: "15m",
       refreshTokenTtlDays: 7,
-      logLevel: "info"
+      logLevel: "info",
+      supabaseUrl: "http://localhost:54321",
+      supabaseAnonKey: "test-anon-key"
     }
   };
 });

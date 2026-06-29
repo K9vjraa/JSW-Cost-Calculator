@@ -38,7 +38,8 @@ export async function login(input: LoginInput, res: Response, ip?: string) {
         id: adminId,
         email: "admin@jsw-mcms.local",
         name: "Costing Admin",
-        role: "COSTING_DEPARTMENT"
+        role: "COSTING_DEPARTMENT",
+        department: "COSTING"
       }
     };
   } else if (input.email.includes("pdqc@jsw-mcms.local") && input.password === "MCMS@2026") {
@@ -57,7 +58,8 @@ export async function login(input: LoginInput, res: Response, ip?: string) {
         id: userId,
         email: "pdqc@jsw-mcms.local",
         name: "PDQC Specialist",
-        role: "PDQC"
+        role: "PDQC",
+        department: "PDQC"
       }
     };
   }
@@ -101,7 +103,8 @@ export async function login(input: LoginInput, res: Response, ip?: string) {
       id: profile.id,
       email: profile.email,
       name: profile.name,
-      role: profile.role
+      role: profile.role,
+      department: profile.department
     }
   };
 }
@@ -116,7 +119,8 @@ export async function refresh(refreshToken: string | undefined, res: Response) {
         id: "9383886f-1438-4f46-81e7-ad77a7fa0450",
         email: "admin@jsw-mcms.local",
         name: "Costing Admin",
-        role: "COSTING_DEPARTMENT"
+        role: "COSTING_DEPARTMENT",
+        department: "COSTING"
       }
     };
   }
@@ -146,7 +150,8 @@ export async function refresh(refreshToken: string | undefined, res: Response) {
       id: profile.id,
       email: profile.email,
       name: profile.name,
-      role: profile.role
+      role: profile.role,
+      department: profile.department
     }
   };
 }

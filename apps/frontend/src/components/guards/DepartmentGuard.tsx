@@ -16,9 +16,10 @@ export function DepartmentGuard({ allowedDepartments, fallbackPath = "/unauthori
     return <Navigate to="/login" replace />;
   }
 
-  console.log("[TRACE] Role Check: actor.department=", actor.department, "allowed=", allowedDepartments);
+  console.log("[TRACE] Role Check: actor.department=", actor.department, "actor.role=", actor.role, "allowed=", allowedDepartments);
 
-  const userDept = actor.department?.toUpperCase();
+  // Robust fallback: if department is not set, infer it from the user role
+  const userDept = (actor.department || (actor.role === "COSTING_DEPARTMENT" ? "COSTING" : actor.role))?.toUpperCase();
   if (!userDept || !allowedDepartments.includes(userDept)) {
     console.trace("RERENDER [DepartmentGuard]: Unauthorized access loop prevented");
     toast.error("Access restricted. You do not have permission to view this section.");
