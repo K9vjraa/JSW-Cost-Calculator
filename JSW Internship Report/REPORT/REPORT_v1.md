@@ -1,9 +1,3 @@
-# Final Report Content Order
-
-## Front Matter
-
-# Cover Page
-
 <div align="center">
 
 # **Metal Cost Management System (MCMS)**
